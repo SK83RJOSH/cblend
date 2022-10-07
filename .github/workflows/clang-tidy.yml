@@ -1,0 +1,42 @@
+name: clang-tidy
+
+on: [pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
+
+    - name: Setup Cpp
+      id: setup_cpp
+      uses: aminya/setup-cpp@v1
+      with:
+        compiler: gcc
+        cmake: true
+        ninja: true
+        conan: false
+        vcpkg: false
+        ccache: true
+
+    - name: Cleanup Conan system packages (they are not properly cached)
+      if: steps.setup_cpp.with.conan == true
+      run: |
+        conan remove -f '*/system'
+
+    - name: Configure CMake
+      run: |
+        cmake -S . -B ./build -G "Ninja Multi-Config" -DCMAKE_BUILD_TYPE:STRING=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=TRUE
+
+    - uses: ZedThree/clang-tidy-review@v0.9.0
+      id: review
+      with:
+        build_dir: './build'
+        exclude: 'third_party/*,external/*'
+        config_file: '.clang-tidy'
+
+    - if: steps.review.outputs.total_comments > 0
+      run: exit 1

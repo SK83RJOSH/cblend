@@ -1,0 +1,18 @@
+{
+  "C_Cpp.autoAddFileAssociations": false,
+  "C_Cpp.codeAnalysis.clangTidy.enabled": false,
+  "C_Cpp.codeAnalysis.exclude": {
+    "**/external": true,
+    "**/third_party": true,
+  },
+  "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
+  "C_Cpp.intelliSenseEngineFallback": "enabled",
+  "clang-tidy.buildPath": "out",
+  "clang-tidy.fixOnSave": false,
+  "clang-tidy.lintOnSave": true,
+  "cmake.copyCompileCommands": "${workspaceFolder}/out/compile_commands.json",
+  "editor.formatOnPaste": true,
+  "editor.formatOnSave": true,
+  "editor.formatOnSaveMode": "modifications",
+  "editor.formatOnType": true,
+}

@@ -1,0 +1,12 @@
+[submodule "cmake/project_options"]
+	path = cmake/project_options
+	url = https://github.com/SK83RJOSH/project_options.git
+[submodule "third_party/Catch2"]
+	path = third_party/Catch2
+	url = https://github.com/catchorg/Catch2.git
+[submodule "third_party/expected"]
+	path = third_party/expected
+	url = https://github.com/TartanLlama/expected.git
+[submodule "third_party/optional"]
+	path = third_party/optional
+	url = https://github.com/TartanLlama/optional.git

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
+    <Type Name="tl::unexpected&lt;*&gt;">
+        <DisplayString>{m_val}</DisplayString>
+        <Expand>
+            <Item Name="value">m_val</Item>
+        </Expand>
+    </Type>
+    <Type Name="tl::expected&lt;*&gt;">
+        <DisplayString Condition="m_has_val">{m_val}</DisplayString>
+        <DisplayString Condition="!m_has_val">{m_unexpect}</DisplayString>
+        <Expand>
+            <Item Condition="m_has_val" Name="value">m_val</Item>
+            <Item Condition="!m_has_val" Name="unexpected">m_unexpect</Item>
+        </Expand>
+    </Type>
+
+    <Type Name="tl::nullopt_t">
+        <DisplayString>nullopt</DisplayString>
+    </Type>
+    <Type Name="tl::optional&lt;*&gt;">
+        <DisplayString Condition="!m_has_value">nullopt</DisplayString>
+        <DisplayString Condition="m_has_value">{m_value}</DisplayString>
+        <Expand>
+            <Item Condition="m_has_value" Name="value">m_value</Item>
+        </Expand>
+    </Type>
+</AutoVisualizer>
