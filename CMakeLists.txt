@@ -265,7 +265,7 @@ if(CBLEND_BUILD_TESTS)
     file(GLOB_RECURSE CBLEND_TEST_SOURCES CONFIGURE_DEPENDS ${CBLEND_TESTS_DIR}/*.cpp)
     add_executable(cblend-tests ${CBLEND_TEST_SOURCES})
     target_link_libraries(cblend-tests PRIVATE project_options project_warnings)
-    target_link_system_libraries(cblend-tests PRIVATE Catch2WithMain cblend)
+    target_link_system_libraries(cblend-tests PRIVATE Catch2 Catch2WithMain cblend)
     add_test(
         NAME cblend::tests
         COMMAND cblend-tests
