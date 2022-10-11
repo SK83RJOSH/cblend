@@ -14,7 +14,7 @@ env:
   CONAN_SYSREQUIRES_MODE: enabled
   CONAN_USER_HOME: "${{ github.workspace }}/conan-cache"
   CONAN_USER_HOME_SHORT: "${{ github.workspace }}/conan-cache/short"
-  CLANG_TIDY_VERSION: "14.0.0"
+  CLANG_TIDY_VERSION: "15.0.2"
 
 jobs:
   Test:
@@ -28,7 +28,7 @@ jobs:
           - macos-latest
           - windows-latest
         compiler:
-          - llvm-14.0.0
+          - llvm-15.0.2
           - gcc-11
         generator:
           - "Ninja Multi-Config"
@@ -48,7 +48,7 @@ jobs:
           # Add appropriate variables for gcov
           - compiler: gcc-11
             gcov_executable: gcov
-          - compiler: llvm-14.0.0
+          - compiler: llvm-15.0.2
             gcov_executable: "llvm-cov gcov"
 
           # Set up preferred package generators, for given build configurations
@@ -100,6 +100,7 @@ jobs:
 
       - uses: actions/checkout@v3
         with:
+          lfs: true
           submodules: recursive
 
       - name: Setup Cache
