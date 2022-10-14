@@ -5,8 +5,9 @@
 
 using namespace cblend;
 
-// NOLINENEXTLINE
+// NOLINTBEGIN(readability-function-cognitive-complexity)
 TEST_CASE("default blend file can be read", "[default]")
+// NOLINTEND(readability-function-cognitive-complexity)
 {
     auto blend = Blend::Open("default.blend");
     REQUIRE(blend);
