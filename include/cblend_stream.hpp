@@ -37,7 +37,7 @@ public:
     [[nodiscard]] std::endian GetEndian() const;
     void SetEndian(std::endian endian);
 
-    [[nodiscard]] bool Seek(SeekValue position);
+    [[nodiscard]] bool Seek(SeekValue value);
     [[nodiscard]] bool Skip(usize number);
     [[nodiscard]] bool Align(usize alignment);
 

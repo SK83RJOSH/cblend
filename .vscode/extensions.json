@@ -3,7 +3,5 @@
     "EditorConfig.EditorConfig",
     "ms-vscode.cmake-tools",
     "ms-vscode.cpptools",
-    "notskm.clang-tidy",
-    "xaver.clang-format",
   ]
 }
