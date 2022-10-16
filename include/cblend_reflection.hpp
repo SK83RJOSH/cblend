@@ -20,90 +20,129 @@ enum class CanonicalType
 class Type
 {
 public:
-    explicit Type(CanonicalType canonical_type);
-
+    Type() = default;
     Type(const Type&) = delete;
     Type(Type&&) = delete;
     Type& operator=(const Type&) = delete;
     Type& operator=(Type&&) = delete;
-    ~Type() = default;
+    virtual ~Type() = default;
 
-    [[nodiscard]] CanonicalType GetCanonicalType() const;
+    [[nodiscard]] virtual usize GetSize() const = 0;
     [[nodiscard]] bool IsAggregateType() const;
     [[nodiscard]] bool IsArrayType() const;
     [[nodiscard]] bool IsFunctionType() const;
-    [[nodiscard]] bool IsFundamentalType() const;
     [[nodiscard]] bool IsPointerType() const;
 
-private:
-    const CanonicalType m_CanonicalType;
+protected:
+    [[nodiscard]] virtual CanonicalType GetCanonicalType() const = 0;
 };
 
-class AggregateType : public Type
+class TypeContainer final
 {
 public:
-    AggregateType(usize size, std::string_view name, std::vector<const Type*>&& fields);
+    TypeContainer() = default;
+    explicit TypeContainer(std::unique_ptr<Type> contained);
+    TypeContainer(const TypeContainer&) = delete;
+    TypeContainer(TypeContainer&& other) noexcept = default;
+    TypeContainer& operator=(const TypeContainer&) = delete;
+    TypeContainer& operator=(TypeContainer&& other) noexcept = default;
+    ~TypeContainer() = default;
 
-    [[nodiscard]] usize GetSize() const;
+    const Type* const* operator&() const;
+
+private:
+    const Type* m_Pointer = nullptr;
+    std::unique_ptr<const Type> m_Contained = nullptr;
+};
+
+template<class T, class... Args>
+requires std::is_base_of_v<Type, T>
+// NOLINTNEXTLINE(readability-identifier-naming)
+[[nodiscard]] inline TypeContainer make_container(Args&&... args)
+{
+    return TypeContainer(std::make_unique<T>(std::forward<Args>(args)...));
+}
+
+class AggregateType final : public Type
+{
+public:
+    AggregateType(usize size, std::string_view name, std::vector<const Type* const*>&& fields);
+    ~AggregateType() final = default;
+
     [[nodiscard]] std::string_view GetName() const;
-    [[nodiscard]] std::span<const Type* const> GetFields() const;
+    [[nodiscard]] std::span<const Type* const* const> GetFields() const;
     [[nodiscard]] const Type* GetField(usize field_index) const;
+    [[nodiscard]] usize GetSize() const final;
 
 private:
     const usize m_Size;
     const std::string_view m_Name;
-    const std::vector<const Type*> m_Fields;
+    const std::vector<const Type* const*> m_Fields;
+
+    [[nodiscard]] CanonicalType GetCanonicalType() const final;
 };
 
-class ArrayType : public Type
+class ArrayType final : public Type
 {
 public:
-    ArrayType(usize size, const Type* element_type);
+    ArrayType(usize element_count, const Type* const* element_type);
+    ~ArrayType() final = default;
 
-    [[nodiscard]] usize GetSize() const;
+    [[nodiscard]] usize GetElementCount() const;
     [[nodiscard]] const Type* GetElementType() const;
+    [[nodiscard]] usize GetSize() const final;
 
 private:
-    const usize m_Size;
-    const Type* const m_ElementType;
+    const usize m_ElementCount;
+    const Type* const* m_ElementType;
+
+    [[nodiscard]] CanonicalType GetCanonicalType() const final;
 };
 
-class FunctionType : public Type
+class FunctionType final : public Type
 {
 public:
-    FunctionType(usize size, std::string_view name);
+    explicit FunctionType(std::string_view name);
+    ~FunctionType() final = default;
 
-    [[nodiscard]] usize GetSize() const;
     [[nodiscard]] std::string_view GetName() const;
+    [[nodiscard]] usize GetSize() const final;
 
 private:
-    const usize m_Size;
     const std::string_view m_Name;
+
+    [[nodiscard]] CanonicalType GetCanonicalType() const final;
 };
 
-class FundamentalType : public Type
+class FundamentalType final : public Type
 {
 public:
-    FundamentalType(usize size, std::string_view name);
+    FundamentalType(std::string_view name, usize size);
+    ~FundamentalType() final = default;
 
-    [[nodiscard]] usize GetSize() const;
     [[nodiscard]] std::string_view GetName() const;
+    [[nodiscard]] usize GetSize() const final;
 
 private:
-    const usize m_Size;
     const std::string_view m_Name;
+    const usize m_Size;
+
+    [[nodiscard]] CanonicalType GetCanonicalType() const final;
 };
 
-class PointerType : public Type
+class PointerType final : public Type
 {
 public:
-    PointerType(const usize size, const Type* pointee_type);
+    PointerType(const Type* const* pointee_type, usize size);
+    ~PointerType() final = default;
 
-    [[nodiscard]] usize GetSize() const;
     [[nodiscard]] const Type* GetPointeeType() const;
+    [[nodiscard]] usize GetSize() const final;
 
 private:
+    const Type* const* m_PointeeType;
     const usize m_Size;
-    const Type* const m_PointeeType;
+
+    [[nodiscard]] CanonicalType GetCanonicalType() const final;
 };
 } // namespace cblend
