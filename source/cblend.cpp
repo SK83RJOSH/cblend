@@ -380,8 +380,7 @@ bool IsValidName(std::string_view name)
     return std::ranges::all_of(name, [](const char chr) { return std::isalpha(chr) != 0 || std::isdigit(chr) != 0 || chr == '_'; });
 }
 
-Result<const Type* const*, BlendParseError>
-ProcessFunctionPointer(std::string_view field_name, usize size, std::deque<TypeContainer>& types)
+Result<const Type* const*, BlendParseError> ProcessFunctionPointer(std::string_view field_name, usize pointer_size, TypeList& types)
 {
     if (!field_name.starts_with('('))
     {
@@ -403,39 +402,60 @@ ProcessFunctionPointer(std::string_view field_name, usize size, std::deque<TypeC
     }
 
     types.push_back(MakeContainer<FunctionType>(name));
-    types.push_back(MakeContainer<PointerType>(&types.back(), size));
+    types.push_back(MakeContainer<PointerType>(&types.back(), pointer_size));
     return &types.back();
 }
 
-Result<const Type* const*, BlendParseError>
-ProcessField(std::string_view field_name, usize size, const Type* const* field_type, std::deque<TypeContainer>& types)
+usize CountPointers(std::string_view field_name)
 {
-    usize field_name_length = field_name.size();
-
     // Scan until we reach the beginning of the field name
-    ssize name_begin = 0;
-    while (name_begin + 1 < field_name_length && field_name[name_begin] == '*')
+    ssize index = 0;
+    while (index + 1 < field_name.size() && field_name[index] == '*')
     {
-        ++name_begin;
+        ++index;
     }
+    return index;
+}
 
-    // Scan until we reach the end of the field name
-    ssize name_end = name_begin;
-    while (name_end < field_name_length && field_name[name_end] != '[')
+usize CalculateNameLength(std::string_view field_name, usize pointer_count)
+{
+    // Scan until we reach the end or an array
+    usize index = pointer_count;
+    while (index < field_name.size() && field_name[index] != '[')
     {
-        ++name_end;
+        ++index;
     }
+    return index - pointer_count;
+}
 
+const Type* const* AddPointers(usize pointer_count, const Type* const* type, usize pointer_size, TypeList& types)
+{
+    while (pointer_count > 0)
+    {
+        types.push_back(MakeContainer<PointerType>(type, pointer_size));
+        type = &types.back();
+        --pointer_count;
+    }
+    return type;
+}
+
+Result<const Type* const*, BlendParseError>
+ProcessField(std::string_view field_name, usize pointer_size, const Type* const* field_type, TypeList& types)
+{
+    const usize pointer_count = CountPointers(field_name);
+    const usize name_length = CalculateNameLength(field_name, pointer_count);
+    const std::string_view name = std::string_view(&field_name[pointer_count], name_length);
     const Type* const* type = field_type;
-    std::string_view name(field_name.begin() + name_begin, field_name.begin() + name_end);
 
     if (!IsValidName(name))
     {
         return MakeError(BlendParseError::InvalidSdnaFieldName);
     }
 
+    usize name_end = pointer_count + name_length;
+
     // Handle arrays such as: field_name[0][1]
-    while (name_end + 1 < field_name_length)
+    while (name_end + 1 < field_name.size())
     {
         auto array_begin = name_end + 1;
 
@@ -445,13 +465,13 @@ ProcessField(std::string_view field_name, usize size, const Type* const* field_t
             return MakeError(BlendParseError::InvalidSdnaFieldName);
         }
 
-        while (name_end + 1 < field_name_length)
+        while (name_end + 1 < field_name.size())
         {
             ++name_end;
             // Handle the ending of an array
             if (field_name[name_end] == ']')
             {
-                if (name_end + 1 >= field_name_length)
+                if (name_end + 1 >= field_name.size())
                 {
                     continue;
                 }
@@ -489,33 +509,32 @@ ProcessField(std::string_view field_name, usize size, const Type* const* field_t
         type = &types.back();
     }
 
-    // Handle pointers such as: **field_name
-    while (name_begin > 0)
-    {
-        types.push_back(MakeContainer<PointerType>(type, size));
-        type = &types.back();
-        --name_begin;
-    }
-
-    return type;
+    return AddPointers(pointer_count, type, pointer_size, types);
 }
 
-Result<std::deque<TypeContainer>, BlendParseError> ProcessSdna(const File& file, const Sdna& sdna)
+Result<TypeDatabase, BlendParseError> CreateTypeDatabase(const File& file, const Sdna& sdna)
 {
-    // First pass, assumes all types are fundamental
     const usize type_count = sdna.type_lengths.size();
-    std::deque<TypeContainer> type_list(type_count);
+    const usize struct_count = sdna.structs.size();
+    const usize pointer_size = file.header.pointer == Pointer::U32 ? sizeof(u32) : sizeof(u64);
+    const usize field_name_count = sdna.field_names.size();
+
+    // First pass, assumes all types are fundamental
+    TypeDatabase type_database;
+    type_database.type_list.resize(type_count);
+    type_database.type_map.reserve(type_count);
 
     for (usize type_index = 0; type_index < type_count; ++type_index)
     {
         const auto size = sdna.type_lengths[type_index];
         const auto& name = sdna.type_names[type_index];
-        type_list[type_index] = MakeContainer<FundamentalType>(name, size);
+        type_database.type_list[type_index] = MakeContainer<FundamentalType>(name, size);
+        type_database.type_map.emplace(name, type_index);
     }
 
     // Second pass, construct all aggregrate types
-    const usize pointer_size = file.header.pointer == Pointer::U32 ? sizeof(u32) : sizeof(u64);
-    const usize field_name_count = sdna.field_names.size();
+    usize struct_index = 0;
+    type_database.struct_map.reserve(struct_count);
 
     for (const auto& [type_index, fields] : sdna.structs)
     {
@@ -523,6 +542,8 @@ Result<std::deque<TypeContainer>, BlendParseError> ProcessSdna(const File& file,
         {
             return MakeError(BlendParseError::InvalidSdnaStruct);
         }
+
+        type_database.struct_map.emplace(++struct_index, type_index);
 
         const usize field_count = fields.size();
         std::vector<const Type* const*> aggregate_fields;
@@ -538,7 +559,7 @@ Result<std::deque<TypeContainer>, BlendParseError> ProcessSdna(const File& file,
             const auto& field_name = sdna.field_names[field_name_index];
 
             // Handle function pointers such as: (*field_name)()
-            if (const auto type = ProcessFunctionPointer(field_name, pointer_size, type_list); *type != nullptr)
+            if (const auto type = ProcessFunctionPointer(field_name, pointer_size, type_database.type_list); *type != nullptr)
             {
                 aggregate_fields.push_back(*type);
                 continue;
@@ -549,10 +570,10 @@ Result<std::deque<TypeContainer>, BlendParseError> ProcessSdna(const File& file,
                 return MakeError(type.error());
             }
 
-            const auto& field_type = type_list[field_type_index];
+            const auto& field_type = type_database.type_list[field_type_index];
 
             // Handle generic fields such as: **field_name[1][2]
-            if (const auto type = ProcessField(field_name, pointer_size, &field_type, type_list); *type != nullptr)
+            if (const auto type = ProcessField(field_name, pointer_size, &field_type, type_database.type_list); *type != nullptr)
             {
                 aggregate_fields.push_back(*type);
                 continue;
@@ -568,13 +589,13 @@ Result<std::deque<TypeContainer>, BlendParseError> ProcessSdna(const File& file,
 
         const auto size = sdna.type_lengths[type_index];
         const auto& name = sdna.type_names[type_index];
-        type_list[type_index] = MakeContainer<AggregateType>(size, name, aggregate_fields);
+        type_database.type_list[type_index] = MakeContainer<AggregateType>(size, name, aggregate_fields);
     }
 
-    return type_list;
+    return type_database;
 }
 
-Result<Blend, BlendParseError> Blend::Open(std::string_view path)
+Result<const Blend, BlendParseError> Blend::Open(std::string_view path)
 {
     auto stream = CreateStream(path);
 
@@ -626,14 +647,14 @@ Result<Blend, BlendParseError> Blend::Open(std::string_view path)
         return MakeError(sdna.error());
     }
 
-    auto types = ProcessSdna(*file, *sdna);
+    auto type_database = CreateTypeDatabase(*file, *sdna);
 
-    if (!types)
+    if (!type_database)
     {
-        return MakeError(types.error());
+        return MakeError(type_database.error());
     }
 
-    return Blend(*file, *sdna);
+    return Blend(*file, *type_database);
 }
 
 [[nodiscard]] Endian Blend::GetEndian() const
@@ -665,4 +686,15 @@ Result<Blend, BlendParseError> Blend::Open(std::string_view path)
     return NULL_OPTION;
 }
 
-Blend::Blend(File& file, Sdna& sdna) : m_File(std::move(file)), m_Sdna(std::move(sdna)) {}
+Option<const Type&> cblend::Blend::GetBlockType(const Block& block) const
+{
+    if (const auto& type_index = m_TypeDatabase.struct_map.find(block.header.struct_index);
+        type_index != m_TypeDatabase.struct_map.end() && type_index->second < m_TypeDatabase.type_list.size() && type_index->second > 0)
+    {
+        const Type& result = m_TypeDatabase.type_list[type_index->second];
+        return result;
+    }
+    return NULL_OPTION;
+}
+
+Blend::Blend(File& file, TypeDatabase& type_database) : m_File(std::move(file)), m_TypeDatabase(std::move(type_database)) {}

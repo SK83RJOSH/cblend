@@ -2,10 +2,10 @@
 
 #include <cblend_types.hpp>
 
+#include <memory>
 #include <span>
 #include <string_view>
 #include <vector>
-#include <memory>
 
 namespace cblend
 {
@@ -50,6 +50,7 @@ public:
     ~TypeContainer() = default;
 
     const Type* const* operator&() const;
+    operator const Type&() const;
 
 private:
     const Type* m_Pointer = nullptr;

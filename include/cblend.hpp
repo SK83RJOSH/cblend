@@ -5,7 +5,10 @@
 #include <algorithm>
 #include <array>
 #include <bit>
+#include <deque>
 #include <ranges>
+#include <string>
+#include <unordered_map>
 
 namespace cblend
 {
@@ -52,8 +55,59 @@ struct BlockCode
     uint32_t value = {};
 };
 
-static constexpr BlockCode BLOCK_CODE_DNA1({ 'D', 'N', 'A', '1' });
-static constexpr BlockCode BLOCK_CODE_ENDB({ 'E', 'N', 'D', 'B' });
+static constexpr BlockCode BLOCK_CODE_DATA({ 'D', 'A', 'T', 'A' });// Arbitrary data
+static constexpr BlockCode BLOCK_CODE_GLOB({ 'G', 'L', 'O', 'B' }); // Global struct
+static constexpr BlockCode BLOCK_CODE_DNA1({ 'D', 'N', 'A', '1' }); // SDNA data
+static constexpr BlockCode BLOCK_CODE_TEST({ 'T', 'E', 'S', 'T' }); // Thumbnail previews
+static constexpr BlockCode BLOCK_CODE_REND({ 'R', 'E', 'N', 'D' }); // Scene and frame info
+static constexpr BlockCode BLOCK_CODE_USER({ 'U', 'S', 'E', 'R' }); // User preferences
+static constexpr BlockCode BLOCK_CODE_ENDB({ 'E', 'N', 'D', 'B' }); // End of file
+static constexpr BlockCode BLOCK_CODE_AC({ 'A', 'C' }); // Action channel
+static constexpr BlockCode BLOCK_CODE_AR({ 'A', 'R' }); // Armature
+static constexpr BlockCode BLOCK_CODE_BR({ 'B', 'R' }); // Brush
+static constexpr BlockCode BLOCK_CODE_CA({ 'C', 'A' }); // Camera
+static constexpr BlockCode BLOCK_CODE_CF({ 'C', 'F' }); // Cache file
+static constexpr BlockCode BLOCK_CODE_Co({ 'C', 'O' }); // Constraint
+static constexpr BlockCode BLOCK_CODE_CU({ 'C', 'U' }); // Curve
+static constexpr BlockCode BLOCK_CODE_CV({ 'C', 'V' }); // Curves
+static constexpr BlockCode BLOCK_CODE_FS({ 'F', 'S' }); // Fluid sim
+static constexpr BlockCode BLOCK_CODE_GD({ 'G', 'D' }); // Grease pencil
+static constexpr BlockCode BLOCK_CODE_GR({ 'G', 'R' }); // Collection
+static constexpr BlockCode BLOCK_CODE_ID({ 'I', 'D' }); // Placeholder
+static constexpr BlockCode BLOCK_CODE_IM({ 'I', 'M' }); // Image
+static constexpr BlockCode BLOCK_CODE_IP({ 'I', 'P' }); // Ipo
+static constexpr BlockCode BLOCK_CODE_KE({ 'K', 'E' }); // Shape key
+static constexpr BlockCode BLOCK_CODE_LA({ 'L', 'A' }); // Light
+static constexpr BlockCode BLOCK_CODE_LI({ 'L', 'I' }); // Library
+static constexpr BlockCode BLOCK_CODE_LP({ 'L', 'P' }); // Light probe
+static constexpr BlockCode BLOCK_CODE_LS({ 'L', 'S' }); // Line style
+static constexpr BlockCode BLOCK_CODE_LT({ 'L', 'T' }); // Lattice
+static constexpr BlockCode BLOCK_CODE_MA({ 'M', 'A' }); // Material
+static constexpr BlockCode BLOCK_CODE_MB({ 'M', 'B' }); // Meta ball
+static constexpr BlockCode BLOCK_CODE_MC({ 'M', 'C' }); // Movie clip
+static constexpr BlockCode BLOCK_CODE_ME({ 'M', 'E' }); // Mesh
+static constexpr BlockCode BLOCK_CODE_MS({ 'M', 'S' }); // Mask
+static constexpr BlockCode BLOCK_CODE_NL({ 'N', 'L' }); // Outline
+static constexpr BlockCode BLOCK_CODE_NT({ 'N', 'T' }); // Node tree
+static constexpr BlockCode BLOCK_CODE_OB({ 'O', 'B' }); // Object
+static constexpr BlockCode BLOCK_CODE_PA({ 'P', 'A' }); // Particle settings
+static constexpr BlockCode BLOCK_CODE_PC({ 'P', 'C' }); // Paint curve
+static constexpr BlockCode BLOCK_CODE_PL({ 'P', 'L' }); // Palette
+static constexpr BlockCode BLOCK_CODE_PT({ 'P', 'T' }); // Point cloud
+static constexpr BlockCode BLOCK_CODE_SC({ 'S', 'C' }); // Scene
+static constexpr BlockCode BLOCK_CODE_SI({ 'S', 'I' }); // Simulation
+static constexpr BlockCode BLOCK_CODE_SK({ 'S', 'K' }); // Speaker
+static constexpr BlockCode BLOCK_CODE_SN({ 'S', 'N' }); // Deprecated
+static constexpr BlockCode BLOCK_CODE_SO({ 'S', 'O' }); // Sound
+static constexpr BlockCode BLOCK_CODE_SQ({ 'S', 'Q' }); // Fake data
+static constexpr BlockCode BLOCK_CODE_SR({ 'S', 'R' }); // Screen
+static constexpr BlockCode BLOCK_CODE_TE({ 'T', 'E' }); // Texture
+static constexpr BlockCode BLOCK_CODE_TX({ 'T', 'X' }); // Text
+static constexpr BlockCode BLOCK_CODE_VF({ 'V', 'F' }); // Vector font
+static constexpr BlockCode BLOCK_CODE_VO({ 'V', 'O' }); // Volume
+static constexpr BlockCode BLOCK_CODE_WM({ 'W', 'M' }); // Window manager
+static constexpr BlockCode BLOCK_CODE_WO({ 'W', 'O' }); // World
+static constexpr BlockCode BLOCK_CODE_WS({ 'W', 'S' }); // Workspace
 
 struct BlockHeader
 {
@@ -121,10 +175,21 @@ enum class BlendParseError
     InvalidSdnaFieldName,
 };
 
+using TypeList = std::deque<TypeContainer>;
+using TypeMap = std::unordered_map<std::string_view, usize>;
+using StructMap = std::unordered_map<usize, usize>;
+
+struct TypeDatabase
+{
+    TypeList type_list;
+    TypeMap type_map;
+    StructMap struct_map;
+};
+
 class Blend final
 {
 public:
-    static Result<Blend, BlendParseError> Open(std::string_view path);
+    static Result<const Blend, BlendParseError> Open(std::string_view path);
 
     [[nodiscard]] Endian GetEndian() const;
     [[nodiscard]] Pointer GetPointer() const;
@@ -135,11 +200,13 @@ public:
     [[nodiscard]] auto GetBlocks(const BlockCode& code) const;
     [[nodiscard]] Option<const Block&> GetBlock(const BlockCode& code) const;
 
-private:
-    const File m_File = {};
-    const Sdna m_Sdna = {};
+    [[nodiscard]] Option<const Type&> GetBlockType(const Block& block) const;
 
-    Blend(File& file, Sdna& sdna);
+private:
+    File m_File = {};
+    TypeDatabase m_TypeDatabase = {};
+
+    Blend(File& file, TypeDatabase& type_database);
 };
 
 static constexpr auto BlockFilter(const BlockCode& code)

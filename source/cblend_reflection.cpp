@@ -29,12 +29,17 @@ const Type* const* TypeContainer::operator&() const
     return &m_Pointer;
 }
 
+TypeContainer::operator const Type&() const
+{
+    return *m_Pointer;
+}
+
 std::vector<AggregateType::Field> CreateFields(const std::span<const Type* const*> field_types)
 {
     usize offset = 0;
     std::vector<AggregateType::Field> fields;
     fields.reserve(fields.size());
-    for (auto field_type : field_types)
+    for (const auto& field_type : field_types)
     {
         fields.push_back({ offset, field_type });
         offset += (*field_type)->GetSize();

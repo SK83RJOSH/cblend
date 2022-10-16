@@ -37,4 +37,13 @@ TEST_CASE("default blend file can be read", "[default]")
             REQUIRE(dna1_block.header.code == BLOCK_CODE_DNA1);
         }
     }
+
+    SECTION("mesh data can be read successfully")
+    {
+        const auto mesh_block = blend->GetBlock(BLOCK_CODE_ME);
+        REQUIRE(mesh_block != NULL_OPTION);
+
+        const auto mesh_type = blend->GetBlockType(*mesh_block);
+        REQUIRE(mesh_type != NULL_OPTION);
+    }
 }
