@@ -46,13 +46,26 @@ struct BlockCode
     using ArrayValue = std::array<u8, ARRAY_VALUE_LENGTH>;
 
     constexpr BlockCode() = default;
-    constexpr explicit BlockCode(uint32_t val) : value(val) {}
-    constexpr explicit BlockCode(const ArrayValue& val) : value(std::bit_cast<uint32_t>(val)) {}
+    constexpr explicit BlockCode(u32 val) : value(val) {}
+    constexpr explicit BlockCode(const ArrayValue& val)
+    {
+        value = std::bit_cast<u32>(val);
+
+        // Apparently blender isn't writing block codes as a char sequence...
+        if constexpr (std::endian::native == std::endian::big)
+        {
+            u32 swapped = (value >> 24) & 0xFF;
+            swapped |= ((value >> 16) & 0xFF) << 8;
+            swapped |= ((value >> 8) & 0xFF) << 16;
+            swapped |= (value & 0xFF) << 24;
+            value = swapped;
+        }
+    }
 
     inline bool operator==(const BlockCode& rhs) const = default;
     inline auto operator<=>(const BlockCode& rhs) const = default;
 
-    uint32_t value = {};
+    u32 value = {};
 };
 
 static constexpr BlockCode BLOCK_CODE_DATA({ 'D', 'A', 'T', 'A' });// Arbitrary data
