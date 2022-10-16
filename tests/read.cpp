@@ -27,7 +27,7 @@ TEST_CASE("default blend file can be read", "[default]")
     SECTION("blocks can be queried successfully")
     {
         const auto endb_block = blend->GetBlock(BLOCK_CODE_ENDB);
-        REQUIRE(endb_block != cblend::nullopt);
+        REQUIRE(endb_block != NULL_OPTION);
 
         const auto dna1_block_count = blend->GetBlockCount(BLOCK_CODE_DNA1);
         REQUIRE(dna1_block_count == 1);

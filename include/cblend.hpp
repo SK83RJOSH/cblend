@@ -60,7 +60,7 @@ struct BlockHeader
     BlockCode code = {};
     u32 length = 0U;
     u64 address = 0U;
-    u32 sdna_index = 0U;
+    u32 struct_index = 0U;
     u32 count = 0U;
 };
 
@@ -102,14 +102,6 @@ struct Sdna
     std::vector<SdnaStruct> structs;
 };
 
-static constexpr auto BlockFilter(const BlockCode& code)
-{
-    return [&code](const Block& block) -> bool
-    {
-        return block.header.code == code;
-    };
-}
-
 enum class BlendParseError
 {
     Unknown,
@@ -124,33 +116,42 @@ enum class BlendParseError
     InvalidSdnaHeader,
     UnexpectedEndOfSdna,
     SdnaNotExhausted,
+    InvalidSdnaStruct,
+    InvalidSdnaField,
+    InvalidSdnaFieldName,
 };
 
-class Blend
+class Blend final
 {
 public:
-    static result<Blend, BlendParseError> Open(std::string_view path);
+    static Result<Blend, BlendParseError> Open(std::string_view path);
 
-    [[nodiscard]] Endian GetEndian() const { return m_File.header.endian; }
-    [[nodiscard]] Pointer GetPointer() const { return m_File.header.pointer; }
+    [[nodiscard]] Endian GetEndian() const;
+    [[nodiscard]] Pointer GetPointer() const;
 
-    [[nodiscard]] usize GetBlockCount() const { return m_File.blocks.size(); }
-    [[nodiscard]] usize GetBlockCount(const BlockCode& code) const { return std::ranges::count_if(m_File.blocks, BlockFilter(code)); }
+    [[nodiscard]] usize GetBlockCount() const;
+    [[nodiscard]] usize GetBlockCount(const BlockCode& code) const;
 
-    [[nodiscard]] auto GetBlocks(const BlockCode& code) const { return m_File.blocks | std::views::filter(BlockFilter(code)); }
-    [[nodiscard]] option<const Block&> GetBlock(const BlockCode& code) const
-    {
-        if (auto blocks = GetBlocks(code); blocks.begin() != blocks.end())
-        {
-            return blocks.front();
-        }
-        return nullopt;
-    }
+    [[nodiscard]] auto GetBlocks(const BlockCode& code) const;
+    [[nodiscard]] Option<const Block&> GetBlock(const BlockCode& code) const;
 
 private:
-    File m_File = {};
-    Sdna m_Sdna = {};
+    const File m_File = {};
+    const Sdna m_Sdna = {};
 
-    explicit Blend(File& file, Sdna& sdna);
+    Blend(File& file, Sdna& sdna);
 };
+
+static constexpr auto BlockFilter(const BlockCode& code)
+{
+    return [&code](const Block& block) -> bool
+    {
+        return block.header.code == code;
+    };
+}
+
+inline auto Blend::GetBlocks(const BlockCode& code) const
+{
+    return m_File.blocks | std::views::filter(BlockFilter(code));
+}
 } // namespace cblend

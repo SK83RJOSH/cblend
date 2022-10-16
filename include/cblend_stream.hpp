@@ -48,13 +48,13 @@ public:
     [[nodiscard]] bool Read(T& value);
 
     template<class T>
-    [[nodiscard]] option<T> Read();
+    [[nodiscard]] Option<T> Read();
 
     template<class T, class... Args>
     bool Read(SeekValue position, Args&&... args);
 
     template<class T>
-    [[nodiscard]] option<T> Read(SeekValue position);
+    [[nodiscard]] Option<T> Read(SeekValue position);
 
 protected:
     usize m_Size = 0;
@@ -135,14 +135,14 @@ inline bool Stream::Read(T& value)
 }
 
 template<class T>
-inline option<T> Stream::Read()
+inline Option<T> Stream::Read()
 {
     T value = {};
     if (Read(value))
     {
         return value;
     }
-    return nullopt;
+    return NULL_OPTION;
 }
 
 template<class T, class... Args>
@@ -162,13 +162,13 @@ inline bool Stream::Read(SeekValue position, Args&&... args)
 }
 
 template<class T>
-inline option<T> Stream::Read(SeekValue position)
+inline Option<T> Stream::Read(SeekValue position)
 {
     T value = {};
     if (Read(position, value))
     {
         return value;
     }
-    return nullopt;
+    return NULL_OPTION;
 }
 } // namespace cblend

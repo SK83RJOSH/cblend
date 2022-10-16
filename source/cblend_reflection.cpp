@@ -29,10 +29,23 @@ const Type* const* TypeContainer::operator&() const
     return &m_Pointer;
 }
 
-AggregateType::AggregateType(usize size, std::string_view name, std::vector<const Type* const*>&& fields)
+std::vector<AggregateType::Field> CreateFields(const std::span<const Type* const*> field_types)
+{
+    usize offset = 0;
+    std::vector<AggregateType::Field> fields;
+    fields.reserve(fields.size());
+    for (auto field_type : field_types)
+    {
+        fields.push_back({ offset, field_type });
+        offset += (*field_type)->GetSize();
+    }
+    return fields;
+}
+
+AggregateType::AggregateType(usize size, std::string_view name, const std::span<const Type* const*> field_types)
     : m_Size(size)
     , m_Name(name)
-    , m_Fields(fields)
+    , m_Fields(CreateFields(field_types))
 {
 }
 
@@ -46,18 +59,27 @@ usize AggregateType::GetSize() const
     return m_Size;
 }
 
-std::span<const Type* const* const> AggregateType::GetFields() const
+std::span<const AggregateType::Field> AggregateType::GetFields() const
 {
     return m_Fields;
 }
 
-const Type* AggregateType::GetField(usize field_index) const
+Option<usize> AggregateType::GetFieldOffset(usize field_index) const
 {
     if (field_index >= m_Fields.size())
     {
-        return nullptr;
+        return NULL_OPTION;
     }
-    return *m_Fields[field_index];
+    return m_Fields[field_index].m_Offset;
+}
+
+Option<const Type&> AggregateType::GetField(usize field_index) const
+{
+    if (field_index >= m_Fields.size())
+    {
+        return NULL_OPTION;
+    }
+    return **m_Fields[field_index].m_Type;
 }
 
 CanonicalType AggregateType::GetCanonicalType() const
@@ -72,14 +94,14 @@ usize ArrayType::GetElementCount() const
     return m_ElementCount;
 }
 
-const Type* ArrayType::GetElementType() const
+const Type& ArrayType::GetElementType() const
 {
-    return *m_ElementType;
+    return **m_ElementType;
 }
 
 usize ArrayType::GetSize() const
 {
-    return GetElementType()->GetSize() * m_ElementCount;
+    return GetElementType().GetSize() * m_ElementCount;
 }
 
 CanonicalType ArrayType::GetCanonicalType() const
@@ -123,9 +145,9 @@ CanonicalType FundamentalType::GetCanonicalType() const
 
 PointerType::PointerType(const Type* const* pointee_type, usize size) : m_PointeeType(pointee_type), m_Size(size) {}
 
-const Type* PointerType::GetPointeeType() const
+const Type& PointerType::GetPointeeType() const
 {
-    return *m_PointeeType;
+    return **m_PointeeType;
 }
 
 usize PointerType::GetSize() const

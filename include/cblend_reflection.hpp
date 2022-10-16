@@ -57,8 +57,7 @@ private:
 
 template<class T, class... Args>
 requires std::is_base_of_v<Type, T>
-// NOLINTNEXTLINE(readability-identifier-naming)
-[[nodiscard]] inline TypeContainer make_container(Args&&... args)
+[[nodiscard]] inline TypeContainer MakeContainer(Args&&... args)
 {
     return TypeContainer(std::make_unique<T>(std::forward<Args>(args)...));
 }
@@ -66,18 +65,25 @@ requires std::is_base_of_v<Type, T>
 class AggregateType final : public Type
 {
 public:
-    AggregateType(usize size, std::string_view name, std::vector<const Type* const*>&& fields);
+    struct Field
+    {
+        const usize m_Offset = 0;
+        const Type* const* m_Type = nullptr;
+    };
+
+    AggregateType(usize size, std::string_view name, const std::span<const Type* const*> field_types);
     ~AggregateType() final = default;
 
     [[nodiscard]] std::string_view GetName() const;
-    [[nodiscard]] std::span<const Type* const* const> GetFields() const;
-    [[nodiscard]] const Type* GetField(usize field_index) const;
+    [[nodiscard]] std::span<const Field> GetFields() const;
+    [[nodiscard]] Option<usize> GetFieldOffset(usize field_index) const;
+    [[nodiscard]] Option<const Type&> GetField(usize field_index) const;
     [[nodiscard]] usize GetSize() const final;
 
 private:
     const usize m_Size;
     const std::string_view m_Name;
-    const std::vector<const Type* const*> m_Fields;
+    const std::vector<Field> m_Fields;
 
     [[nodiscard]] CanonicalType GetCanonicalType() const final;
 };
@@ -89,7 +95,7 @@ public:
     ~ArrayType() final = default;
 
     [[nodiscard]] usize GetElementCount() const;
-    [[nodiscard]] const Type* GetElementType() const;
+    [[nodiscard]] const Type& GetElementType() const;
     [[nodiscard]] usize GetSize() const final;
 
 private:
@@ -136,7 +142,7 @@ public:
     PointerType(const Type* const* pointee_type, usize size);
     ~PointerType() final = default;
 
-    [[nodiscard]] const Type* GetPointeeType() const;
+    [[nodiscard]] const Type& GetPointeeType() const;
     [[nodiscard]] usize GetSize() const final;
 
 private:

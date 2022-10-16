@@ -9,42 +9,37 @@
 namespace cblend
 {
 template<class T, class E>
-using result = tl::expected<T, E>;
+using Result = tl::expected<T, E>;
 
 template<class E>
-using error = tl::unexpected<E>;
+using Error = tl::unexpected<E>;
 
 template<class E>
-// NOLINTNEXTLINE(readability-identifier-naming)
-inline constexpr error<typename std::decay<E>::type> make_error(E&& err)
+inline constexpr Error<typename std::decay<E>::type> MakeError(E&& err)
 {
     return tl::make_unexpected(err);
 }
 
 template<class T>
-using option = tl::optional<T>;
+using Option = tl::optional<T>;
 
-using nullopt_t = tl::nullopt_t;
-// NOLINTNEXTLINE(readability-identifier-naming)
-static constexpr auto nullopt = tl::nullopt;
+using NullOption = tl::nullopt_t;
+static constexpr auto NULL_OPTION = tl::nullopt;
 
 template<class T>
-// NOLINTNEXTLINE(readability-identifier-naming)
-inline constexpr option<T> make_option(T&& val)
+inline constexpr Option<T> MakeOption(T&& val)
 {
     return tl::make_optional(val);
 }
 
 template<class T, class... Args>
-// NOLINTNEXTLINE(readability-identifier-naming)
-inline constexpr option<T> make_option(Args&&... args)
+inline constexpr Option<T> MakeOption(Args&&... args)
 {
     return tl::make_optional(args...);
 }
 
 template<class T, class U, class... Args>
-// NOLINTNEXTLINE(readability-identifier-naming)
-inline constexpr option<T> make_option(std::initializer_list<U> init, Args&&... args)
+inline constexpr Option<T> MakeOption(std::initializer_list<U> init, Args&&... args)
 {
     return tl::make_optional(init, args...);
 }
