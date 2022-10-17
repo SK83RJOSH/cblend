@@ -7,6 +7,8 @@
 #include <fstream>
 #include <ranges>
 #include <span>
+#include <string>
+#include <string_view>
 #include <variant>
 
 namespace cblend
@@ -67,6 +69,13 @@ protected:
     virtual bool SeekRelative(ssize position) = 0;
 };
 
+enum class FileStreamError : u8
+{
+    FileNotFound,
+    DirectorySpecified,
+    AccessDenied,
+};
+
 class FileStream final : public Stream
 {
 public:
@@ -76,6 +85,8 @@ public:
     FileStream& operator=(const FileStream&) = delete;
     FileStream& operator=(FileStream&&) = default;
     ~FileStream() final = default;
+
+    static Result<FileStream, FileStreamError> Create(std::string_view path);
 
     using Stream::Read;
 

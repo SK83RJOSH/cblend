@@ -1,366 +1,9 @@
 #include <cblend.hpp>
-#include <cblend_stream.hpp>
 
 #include <cctype>
 #include <charconv>
-#include <deque>
-#include <filesystem>
-#include <memory>
 
 using namespace cblend;
-
-template<class T>
-concept PtrType = std::is_same_v<T, u32> || std::is_same_v<T, u64>;
-
-[[nodiscard]] Result<FileStream, BlendParseError> CreateStream(std::string_view path)
-{
-    namespace fs = std::filesystem;
-
-    auto file_path = fs::path(path);
-
-    if (!fs::exists(file_path))
-    {
-        return MakeError(BlendParseError::FileNotFound);
-    }
-
-    if (!fs::is_regular_file(file_path))
-    {
-        return MakeError(BlendParseError::DirectorySpecified);
-    }
-
-    std::ifstream stream(file_path.c_str(), std::ifstream::binary);
-
-    if (stream.bad())
-    {
-        return MakeError(BlendParseError::AccessDenied);
-    }
-
-    return FileStream(stream);
-}
-
-[[nodiscard]] Result<Header, BlendParseError> ReadHeader(Stream& stream)
-{
-    Header header;
-
-    if (!stream.Read(header.magic))
-    {
-        return MakeError(BlendParseError::UnexpectedEndOfFile);
-    }
-
-    if (header.magic != HEADER_MAGIC)
-    {
-        return MakeError(BlendParseError::InvalidFileHeader);
-    }
-
-    if (!stream.Read(header.pointer))
-    {
-        return MakeError(BlendParseError::UnexpectedEndOfFile);
-    }
-
-    if (header.pointer != Pointer::U32 && header.pointer != Pointer::U64)
-    {
-        return MakeError(BlendParseError::InvalidFileHeader);
-    }
-
-    if (!stream.Read(header.endian))
-    {
-        return MakeError(BlendParseError::UnexpectedEndOfFile);
-    }
-
-    if (header.endian != Endian::Big && header.endian != Endian::Little)
-    {
-        return MakeError(BlendParseError::InvalidFileHeader);
-    }
-
-    if (!stream.Read(header.version))
-    {
-        return MakeError(BlendParseError::UnexpectedEndOfFile);
-    }
-
-    return header;
-}
-
-template<PtrType Ptr>
-[[nodiscard]] Result<BlockHeader, BlendParseError> ReadBlockHeader(Stream& stream)
-{
-    BlockHeader header = {};
-
-    if (!stream.Read(header.code))
-    {
-        return MakeError(BlendParseError::UnexpectedEndOfFile);
-    }
-
-    if (!stream.Read(header.length))
-    {
-        return MakeError(BlendParseError::UnexpectedEndOfFile);
-    }
-
-    Ptr address = 0U;
-
-    if (!stream.Read(address))
-    {
-        return MakeError(BlendParseError::UnexpectedEndOfFile);
-    }
-
-    header.address = u64(address);
-
-    if (!stream.Read(header.struct_index))
-    {
-        return MakeError(BlendParseError::UnexpectedEndOfFile);
-    }
-
-    if (!stream.Read(header.count))
-    {
-        return MakeError(BlendParseError::UnexpectedEndOfFile);
-    }
-
-    return header;
-}
-
-template<PtrType Ptr>
-[[nodiscard]] Result<File, BlendParseError> ReadFile(Stream& stream, const Header& header)
-{
-    Block block;
-    std::vector<Block> blocks;
-
-    while (block.header.code != BLOCK_CODE_ENDB)
-    {
-        auto block_header = ReadBlockHeader<Ptr>(stream);
-
-        if (!block_header)
-        {
-            return MakeError(block_header.error());
-        }
-
-        block.header = *block_header;
-
-        if (block.header.length != 0)
-        {
-            block.body.resize(block.header.length, 0U);
-
-            if (!stream.Read(std::as_writable_bytes(std::span{ block.body })))
-            {
-                return MakeError(BlendParseError::UnexpectedEndOfFile);
-            }
-        }
-
-        blocks.push_back(block);
-    }
-
-    return File{
-        header,
-        blocks,
-    };
-}
-
-[[nodiscard]] Result<std::vector<std::string_view>, BlendParseError> ReadSdnaStrings(MemoryStream& stream, const BlockCode& code)
-{
-    BlockCode magic;
-
-    if (!stream.Read(magic))
-    {
-        return MakeError(BlendParseError::UnexpectedEndOfSdna);
-    }
-
-    if (magic != code)
-    {
-        return MakeError(BlendParseError::InvalidSdnaHeader);
-    }
-
-    u32 count = 0U;
-
-    if (!stream.Read(count))
-    {
-        return MakeError(BlendParseError::UnexpectedEndOfSdna);
-    }
-
-    std::vector<std::string_view> strings(count, "");
-
-    for (u32 name_index = 0; name_index < count; ++name_index)
-    {
-        if (!stream.Read(strings[name_index]))
-        {
-            return MakeError(BlendParseError::UnexpectedEndOfSdna);
-        }
-    }
-
-    if (!stream.Align(4))
-    {
-        return MakeError(BlendParseError::UnexpectedEndOfSdna);
-    }
-
-    return strings;
-}
-
-[[nodiscard]] Result<std::vector<u16>, BlendParseError> ReadSdnaLengths(Stream& stream, const usize count)
-{
-    BlockCode magic;
-
-    if (!stream.Read(magic))
-    {
-        return MakeError(BlendParseError::UnexpectedEndOfSdna);
-    }
-
-    if (magic != SDNA_TLEN_MAGIC)
-    {
-        return MakeError(BlendParseError::InvalidSdnaHeader);
-    }
-
-    auto type_lengths = std::vector<u16>(count, 0U);
-
-    for (usize type_index = 0; type_index < count; ++type_index)
-    {
-        if (!stream.Read(type_lengths[type_index]))
-        {
-            return MakeError(BlendParseError::UnexpectedEndOfSdna);
-        }
-    }
-
-    if (!stream.Align(4))
-    {
-        return MakeError(BlendParseError::UnexpectedEndOfSdna);
-    }
-
-    return type_lengths;
-}
-
-[[nodiscard]] Result<SdnaStruct, BlendParseError> ReadSdnaStruct(Stream& stream)
-{
-    SdnaStruct result;
-
-    if (!stream.Read(result.type_index))
-    {
-        return MakeError(BlendParseError::UnexpectedEndOfSdna);
-    }
-
-    u16 field_count = 0U;
-
-    if (!stream.Read(field_count))
-    {
-        return MakeError(BlendParseError::UnexpectedEndOfSdna);
-    }
-
-    result.fields.resize(field_count);
-
-    for (u32 field_index = 0; field_index < field_count; ++field_index)
-    {
-        auto& field = result.fields[field_index];
-
-        if (!stream.Read(field.type_index))
-        {
-            return MakeError(BlendParseError::UnexpectedEndOfSdna);
-        }
-
-        if (!stream.Read(field.name_index))
-        {
-            return MakeError(BlendParseError::UnexpectedEndOfSdna);
-        }
-    }
-
-    return result;
-}
-
-[[nodiscard]] Result<std::vector<SdnaStruct>, BlendParseError> ReadSdnaStructs(Stream& stream)
-{
-    BlockCode magic;
-
-    if (!stream.Read(magic))
-    {
-        return MakeError(BlendParseError::UnexpectedEndOfSdna);
-    }
-
-    if (magic != SDNA_STRC_MAGIC)
-    {
-        return MakeError(BlendParseError::InvalidSdnaHeader);
-    }
-
-    u32 struct_count = 0U;
-
-    if (!stream.Read(struct_count))
-    {
-        return MakeError(BlendParseError::UnexpectedEndOfSdna);
-    }
-
-    std::vector<SdnaStruct> result(struct_count, SdnaStruct{});
-
-    for (u32 struct_index = 0; struct_index < struct_count; ++struct_index)
-    {
-        auto current = ReadSdnaStruct(stream);
-
-        if (!current)
-        {
-            return MakeError(current.error());
-        }
-
-        result[struct_index] = std::move(*current);
-    }
-
-    return result;
-}
-
-Result<Sdna, BlendParseError> ReadSdna(const File& file)
-{
-    auto blocks = file.blocks | std::views::filter(BlockFilter(BLOCK_CODE_DNA1));
-
-    if (blocks.end() == blocks.begin())
-    {
-        return MakeError(BlendParseError::SdnaNotFound);
-    }
-
-    auto stream = MemoryStream(blocks.begin()->body);
-
-    BlockCode magic;
-
-    if (!stream.Read(magic))
-    {
-        return MakeError(BlendParseError::UnexpectedEndOfSdna);
-    }
-
-    if (magic != SDNA_MAGIC)
-    {
-        return MakeError(BlendParseError::InvalidSdnaHeader);
-    }
-
-    auto field_names = ReadSdnaStrings(stream, SDNA_NAME_MAGIC);
-
-    if (!field_names)
-    {
-        return MakeError(field_names.error());
-    }
-
-    auto type_names = ReadSdnaStrings(stream, SDNA_TYPE_MAGIC);
-
-    if (!type_names)
-    {
-        return MakeError(type_names.error());
-    }
-
-    auto type_lengths = ReadSdnaLengths(stream, type_names->size());
-
-    if (!type_lengths)
-    {
-        return MakeError(type_lengths.error());
-    }
-
-    auto structs = ReadSdnaStructs(stream);
-
-    if (!structs)
-    {
-        return MakeError(structs.error());
-    }
-
-    if (!stream.IsAtEnd())
-    {
-        return MakeError(BlendParseError::SdnaNotExhausted);
-    }
-
-    return Sdna{
-        .field_names = std::move(*field_names),
-        .type_names = std::move(*type_names),
-        .type_lengths = std::move(*type_lengths),
-        .structs = std::move(*structs),
-    };
-}
 
 bool IsValidName(std::string_view name)
 {
@@ -380,7 +23,8 @@ bool IsValidName(std::string_view name)
     return std::ranges::all_of(name, [](const char chr) { return std::isalpha(chr) != 0 || std::isdigit(chr) != 0 || chr == '_'; });
 }
 
-Result<const Type* const*, BlendParseError> ProcessFunctionPointer(std::string_view field_name, usize pointer_size, TypeList& types)
+Result<const Type* const*, ReflectionError>
+ProcessFunctionPointer(std::string_view field_name, usize pointer_size, TypeDatabase::TypeList& types)
 {
     if (!field_name.starts_with('('))
     {
@@ -391,14 +35,14 @@ Result<const Type* const*, BlendParseError> ProcessFunctionPointer(std::string_v
 
     if (field_name.size() <= MIN_FUNCTION_POINTER_LENGTH)
     {
-        return MakeError(BlendParseError::InvalidSdnaFieldName);
+        return MakeError(ReflectionError::InvalidSdnaFieldName);
     }
 
     std::string_view name(field_name.begin() + 2, field_name.end() - 3);
 
     if (!IsValidName(name))
     {
-        return MakeError(BlendParseError::InvalidSdnaFieldName);
+        return MakeError(ReflectionError::InvalidSdnaFieldName);
     }
 
     types.push_back(MakeContainer<FunctionType>(name));
@@ -428,7 +72,7 @@ usize CalculateNameLength(std::string_view field_name, usize pointer_count)
     return index - pointer_count;
 }
 
-const Type* const* AddPointers(usize pointer_count, const Type* const* type, usize pointer_size, TypeList& types)
+const Type* const* AddPointers(usize pointer_count, const Type* const* type, usize pointer_size, TypeDatabase::TypeList& types)
 {
     while (pointer_count > 0)
     {
@@ -439,8 +83,8 @@ const Type* const* AddPointers(usize pointer_count, const Type* const* type, usi
     return type;
 }
 
-Result<const Type* const*, BlendParseError>
-ProcessField(std::string_view field_name, usize pointer_size, const Type* const* field_type, TypeList& types)
+Result<const Type* const*, ReflectionError>
+ProcessField(std::string_view field_name, usize pointer_size, const Type* const* field_type, TypeDatabase::TypeList& types)
 {
     const usize pointer_count = CountPointers(field_name);
     const usize name_length = CalculateNameLength(field_name, pointer_count);
@@ -449,7 +93,7 @@ ProcessField(std::string_view field_name, usize pointer_size, const Type* const*
 
     if (!IsValidName(name))
     {
-        return MakeError(BlendParseError::InvalidSdnaFieldName);
+        return MakeError(ReflectionError::InvalidSdnaFieldName);
     }
 
     usize name_end = pointer_count + name_length;
@@ -462,7 +106,7 @@ ProcessField(std::string_view field_name, usize pointer_size, const Type* const*
         // First character must be '['
         if (field_name[name_end] != '[')
         {
-            return MakeError(BlendParseError::InvalidSdnaFieldName);
+            return MakeError(ReflectionError::InvalidSdnaFieldName);
         }
 
         while (name_end + 1 < field_name.size())
@@ -479,13 +123,13 @@ ProcessField(std::string_view field_name, usize pointer_size, const Type* const*
                 // Next character must be '['
                 if (field_name[++name_end] != '[')
                 {
-                    return MakeError(BlendParseError::InvalidSdnaFieldName);
+                    return MakeError(ReflectionError::InvalidSdnaFieldName);
                 }
             }
             // We encountered a non-digit
             else if (std::isdigit(field_name[name_end]) == 0)
             {
-                return MakeError(BlendParseError::InvalidSdnaFieldName);
+                return MakeError(ReflectionError::InvalidSdnaFieldName);
             }
         }
 
@@ -494,7 +138,7 @@ ProcessField(std::string_view field_name, usize pointer_size, const Type* const*
         // Last character must be ']'
         if (field_name[name_end] != ']')
         {
-            return MakeError(BlendParseError::InvalidSdnaFieldName);
+            return MakeError(ReflectionError::InvalidSdnaFieldName);
         }
 
         usize count = 0;
@@ -502,7 +146,7 @@ ProcessField(std::string_view field_name, usize pointer_size, const Type* const*
 
         if (result.ec != std::errc())
         {
-            return MakeError(BlendParseError::InvalidSdnaFieldName);
+            return MakeError(ReflectionError::InvalidSdnaFieldName);
         }
 
         types.push_back(MakeContainer<ArrayType>(count, type));
@@ -512,7 +156,7 @@ ProcessField(std::string_view field_name, usize pointer_size, const Type* const*
     return AddPointers(pointer_count, type, pointer_size, types);
 }
 
-Result<TypeDatabase, BlendParseError> CreateTypeDatabase(const File& file, const Sdna& sdna)
+Result<TypeDatabase, ReflectionError> CreateTypeDatabase(const File& file, const Sdna& sdna)
 {
     const usize type_count = sdna.type_lengths.size();
     const usize struct_count = sdna.structs.size();
@@ -540,7 +184,7 @@ Result<TypeDatabase, BlendParseError> CreateTypeDatabase(const File& file, const
     {
         if (type_index >= type_count)
         {
-            return MakeError(BlendParseError::InvalidSdnaStruct);
+            return MakeError(ReflectionError::InvalidSdnaStruct);
         }
 
         type_database.struct_map.emplace(++struct_index, type_index);
@@ -553,7 +197,7 @@ Result<TypeDatabase, BlendParseError> CreateTypeDatabase(const File& file, const
         {
             if (field_name_index >= field_name_count || field_type_index >= type_count)
             {
-                return MakeError(BlendParseError::InvalidSdnaField);
+                return MakeError(ReflectionError::InvalidSdnaField);
             }
 
             const auto& field_name = sdna.field_names[field_name_index];
@@ -584,7 +228,7 @@ Result<TypeDatabase, BlendParseError> CreateTypeDatabase(const File& file, const
                 return MakeError(type.error());
             }
 
-            return MakeError(BlendParseError::InvalidSdnaField);
+            return MakeError(ReflectionError::InvalidSdnaField);
         }
 
         const auto size = sdna.type_lengths[type_index];
@@ -595,20 +239,39 @@ Result<TypeDatabase, BlendParseError> CreateTypeDatabase(const File& file, const
     return type_database;
 }
 
-Result<const Blend, BlendParseError> Blend::Open(std::string_view path)
+MemoryTable CreateMemoryTable(const File& file)
 {
-    auto stream = CreateStream(path);
+    std::vector<MemoryRange> ranges;
+    ranges.reserve(file.blocks.size());
+
+    for (const auto& [header, body] : file.blocks)
+    {
+        if (header.length == 0)
+        {
+            continue;
+        }
+        ranges.emplace_back(MemoryRange{ header.address, header.address + header.length, std::span{ body } });
+    }
+
+    std::ranges::sort(ranges, [](const MemoryRange& first, const MemoryRange& second) { return first.head < second.head; });
+
+    return MemoryTable(ranges);
+}
+
+Result<const Blend, BlendError> Blend::Open(std::string_view path)
+{
+    auto stream = FileStream::Create(path);
 
     if (!stream)
     {
-        return MakeError(stream.error());
+        return MakeError(BlendError(stream.error()));
     }
 
     const auto header = ReadHeader(*stream);
 
     if (!header)
     {
-        return MakeError(header.error());
+        return MakeError(BlendError(header.error()));
     }
 
     if (header->endian == Endian::Little)
@@ -620,41 +283,35 @@ Result<const Blend, BlendParseError> Blend::Open(std::string_view path)
         stream->SetEndian(std::endian::big);
     }
 
-    auto file = [&]
-    {
-        if (header->pointer == Pointer::U32)
-        {
-            return ReadFile<u32>(*stream, *header);
-        }
-
-        return ReadFile<u64>(*stream, *header);
-    }();
+    auto file = ReadFile(*stream, *header);
 
     if (!file)
     {
-        return MakeError(file.error());
+        return MakeError(BlendError(file.error()));
     }
 
     if (!stream->IsAtEnd())
     {
-        return MakeError(BlendParseError::FileNotExhausted);
+        return MakeError(BlendError(FormatError::FileNotExhausted));
     }
 
     auto sdna = ReadSdna(*file);
 
     if (!sdna)
     {
-        return MakeError(sdna.error());
+        return MakeError(BlendError(sdna.error()));
     }
 
     auto type_database = CreateTypeDatabase(*file, *sdna);
 
     if (!type_database)
     {
-        return MakeError(type_database.error());
+        return MakeError(BlendError(type_database.error()));
     }
 
-    return Blend(*file, *type_database);
+    auto memory_table = CreateMemoryTable(*file);
+
+    return Blend(*file, *type_database, memory_table);
 }
 
 [[nodiscard]] Endian Blend::GetEndian() const
@@ -697,4 +354,28 @@ Option<const Type&> cblend::Blend::GetBlockType(const Block& block) const
     return NULL_OPTION;
 }
 
-Blend::Blend(File& file, TypeDatabase& type_database) : m_File(std::move(file)), m_TypeDatabase(std::move(type_database)) {}
+Blend::Blend(File& file, TypeDatabase& type_database, MemoryTable& memory_table)
+    : m_File(std::move(file))
+    , m_TypeDatabase(std::move(type_database))
+    , m_MemoryTable(memory_table)
+{
+}
+
+MemoryTable::MemoryTable(std::vector<MemoryRange>& ranges) : m_Ranges(std::move(ranges)) {}
+
+std::span<const u8> MemoryTable::GetMemory(u64 address, usize size) const
+{
+    const u64 head = address;
+    const u64 tail = address + size;
+    auto range_contains = [head, tail](const MemoryRange& range)
+    {
+        return range.head <= head && tail <= range.tail;
+    };
+
+    if (auto result = std::ranges::partition_point(m_Ranges, range_contains); result != m_Ranges.end())
+    {
+        return std::span{ result->span.data() + (head - result->head), size };
+    }
+
+    return {};
+}

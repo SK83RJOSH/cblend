@@ -1,6 +1,7 @@
-#include "cblend_stream.hpp"
+#include <cblend_stream.hpp>
 
 #include <cstring>
+#include <filesystem>
 
 using namespace cblend;
 
@@ -150,6 +151,32 @@ bool FileStream::SeekRelative(ssize position)
     m_Stream.seekg(position, std::ifstream::cur);
     m_Position = m_Stream.tellg();
     return !m_Stream.bad();
+}
+
+[[nodiscard]] Result<FileStream, FileStreamError> FileStream::Create(std::string_view path)
+{
+    namespace fs = std::filesystem;
+
+    auto file_path = fs::path(path);
+
+    if (!fs::exists(file_path))
+    {
+        return MakeError(FileStreamError::FileNotFound);
+    }
+
+    if (!fs::is_regular_file(file_path))
+    {
+        return MakeError(FileStreamError::DirectorySpecified);
+    }
+
+    std::ifstream stream(file_path.c_str(), std::ifstream::binary);
+
+    if (stream.bad())
+    {
+        return MakeError(FileStreamError::AccessDenied);
+    }
+
+    return FileStream(stream);
 }
 
 MemoryStream::MemoryStream(std::span<const u8> span) : m_Span(span)
