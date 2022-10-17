@@ -108,7 +108,7 @@ struct Sdna
     std::vector<SdnaStruct> structs = {};
 };
 
-enum class FormatError
+enum class FormatError : u8
 {
     InvalidFileHeader,
     InvalidBlockHeader,

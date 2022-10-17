@@ -51,7 +51,7 @@ private:
     std::vector<MemoryRange> m_Ranges;
 };
 
-enum class ReflectionError
+enum class ReflectionError : u8
 {
     InvalidSdnaStruct,
     InvalidSdnaField,

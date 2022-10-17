@@ -116,8 +116,8 @@ template<PtrType Ptr>
     }
 
     return File{
-        header,
-        blocks,
+        .header = header,
+        .blocks = blocks,
     };
 }
 

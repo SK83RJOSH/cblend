@@ -16,7 +16,7 @@ namespace cblend
 class Stream
 {
 public:
-    enum class StreamPosition
+    enum class StreamPosition : u8
     {
         Begin,
         End

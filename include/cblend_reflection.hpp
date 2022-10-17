@@ -9,7 +9,7 @@
 
 namespace cblend
 {
-enum class CanonicalType
+enum class CanonicalType : u8
 {
     Aggregate,
     Array,
