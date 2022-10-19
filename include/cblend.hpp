@@ -34,18 +34,8 @@ public:
     explicit MemoryTable(std::vector<MemoryRange>& ranges);
 
     std::span<const u8> GetMemory(u64 address, usize size) const;
-
     template<class T>
-    Option<T> GetMemory(u64 address) const
-    {
-        if (auto result = GetMemory(address, sizeof(T)); !result.empty())
-        {
-            std::array<u8, sizeof(T)> value;
-            std::copy(result.begin(), result.end(), value.data());
-            return std::bit_cast<T>(value);
-        }
-        return NULL_OPTION;
-    }
+    Option<T> GetMemory(u64 address) const;
 
 private:
     std::vector<MemoryRange> m_Ranges;
@@ -93,7 +83,7 @@ public:
     [[nodiscard]] const BlendType& GetFieldType() const;
 
     [[nodiscard]] std::span<const u8> GetData(std::span<const u8> span) const;
-    [[nodiscard]] std::span<const u8> GetData(const Block& block) const { return GetData(block.body); }
+    [[nodiscard]] std::span<const u8> GetData(const Block& block) const;
 
     template<class T>
     [[nodiscard]] Option<T> GetValue(std::span<const u8> span) const;
@@ -133,7 +123,19 @@ private:
 };
 
 template<class T>
-inline [[nodiscard]] Option<T> BlendFieldInfo::GetValue(std::span<const u8> span) const
+inline Option<T> MemoryTable::GetMemory(u64 address) const
+{
+    if (auto result = GetMemory(address, sizeof(T)); !result.empty())
+    {
+        std::array<u8, sizeof(T)> value;
+        std::copy(result.begin(), result.end(), value.data());
+        return std::bit_cast<T>(value);
+    }
+    return NULL_OPTION;
+}
+
+template<class T>
+inline Option<T> BlendFieldInfo::GetValue(std::span<const u8> span) const
 {
     if (m_Size != sizeof(T))
     {
@@ -151,7 +153,7 @@ inline [[nodiscard]] Option<T> BlendFieldInfo::GetValue(std::span<const u8> span
 }
 
 template<class T>
-inline [[nodiscard]] Option<T> BlendFieldInfo::GetValue(const Block& block) const
+inline Option<T> BlendFieldInfo::GetValue(const Block& block) const
 {
     return GetValue<T>(block.body);
 }

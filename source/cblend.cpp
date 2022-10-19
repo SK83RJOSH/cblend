@@ -120,6 +120,11 @@ BlendFieldInfo::BlendFieldInfo(const AggregateType::Field& field, const BlendTyp
     return std::span{ span.data() + m_Offset, m_Size };
 }
 
+[[nodiscard]] std::span<const u8> BlendFieldInfo::GetData(const Block& block) const
+{
+    return GetData(block.body);
+}
+
 bool IsValidName(std::string_view name)
 {
     // Must not be empty
