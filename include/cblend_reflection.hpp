@@ -69,17 +69,18 @@ class AggregateType final : public Type
 public:
     struct Field
     {
-        const usize m_Offset = 0;
-        const Type* const* m_Type = nullptr;
+        const usize offset = 0;
+        const std::string_view name = {};
+        const Type* const* type = nullptr;
     };
 
-    AggregateType(usize size, std::string_view name, const std::span<const Type* const*> field_types);
+    AggregateType(usize size, std::string_view name, std::vector<AggregateType::Field>& fields);
     ~AggregateType() final = default;
 
     [[nodiscard]] std::string_view GetName() const;
     [[nodiscard]] std::span<const Field> GetFields() const;
     [[nodiscard]] Option<usize> GetFieldOffset(usize field_index) const;
-    [[nodiscard]] Option<const Type&> GetField(usize field_index) const;
+    [[nodiscard]] Option<const Type&> GetFieldType(usize field_index) const;
     [[nodiscard]] usize GetSize() const final;
 
 private:

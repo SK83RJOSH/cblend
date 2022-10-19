@@ -38,9 +38,9 @@ public:
     template<class T>
     Option<T> GetMemory(u64 address) const
     {
-        std::array<u8, sizeof(T)> value;
-        if (auto result = GetMemory(address, value.size()); !result.empty())
+        if (auto result = GetMemory(address, sizeof(T)); !result.empty())
         {
+            std::array<u8, sizeof(T)> value;
             std::copy(result.begin(), result.end(), value.data());
             return std::bit_cast<T>(value);
         }
@@ -60,6 +60,54 @@ enum class ReflectionError : u8
 
 using BlendError = std::variant<FileStreamError, FormatError, ReflectionError>;
 
+class BlendFieldInfo;
+
+class BlendType
+{
+public:
+    BlendType(const Type& type);
+
+    inline bool operator==(const BlendType& rhs) const = default;
+
+    [[nodiscard]] bool HasElementType() const;
+    [[nodiscard]] Option<BlendType> GetElementType() const;
+
+    [[nodiscard]] Option<BlendFieldInfo> GetField(std::string_view field_name) const;
+    [[nodiscard]] std::vector<BlendFieldInfo> GetFields() const;
+
+private:
+    const Type* m_ElementType = nullptr;
+    std::vector<const AggregateType::Field*> m_Fields;
+    std::unordered_map<std::string_view, const AggregateType::Field*> m_FieldsByName;
+};
+
+class BlendFieldInfo
+{
+public:
+    BlendFieldInfo(const AggregateType::Field& field, const BlendType& declaring_type);
+
+    inline bool operator==(const BlendFieldInfo& rhs) const = default;
+
+    [[nodiscard]] std::string_view GetName() const;
+    [[nodiscard]] const BlendType& GetDeclaringType() const;
+    [[nodiscard]] const BlendType& GetFieldType() const;
+
+    [[nodiscard]] std::span<const u8> GetData(std::span<const u8> span) const;
+    [[nodiscard]] std::span<const u8> GetData(const Block& block) const { return GetData(block.body); }
+
+    template<class T>
+    [[nodiscard]] Option<T> GetValue(std::span<const u8> span) const;
+    template<class T>
+    [[nodiscard]] Option<T> GetValue(const Block& block) const;
+
+private:
+    usize m_Offset;
+    std::string_view m_Name;
+    const BlendType& m_DeclaringType;
+    BlendType m_FieldType;
+    usize m_Size;
+};
+
 class Blend final
 {
 public:
@@ -74,7 +122,7 @@ public:
     [[nodiscard]] auto GetBlocks(const BlockCode& code) const;
     [[nodiscard]] Option<const Block&> GetBlock(const BlockCode& code) const;
 
-    [[nodiscard]] Option<const Type&> GetBlockType(const Block& block) const;
+    [[nodiscard]] Option<BlendType> GetBlockType(const Block& block) const;
 
 private:
     File m_File = {};
@@ -83,6 +131,30 @@ private:
 
     Blend(File& file, TypeDatabase& type_database, MemoryTable& memory_table);
 };
+
+template<class T>
+inline [[nodiscard]] Option<T> BlendFieldInfo::GetValue(std::span<const u8> span) const
+{
+    if (m_Size != sizeof(T))
+    {
+        return NULL_OPTION;
+    }
+
+    if (auto value = GetData(span); value.size() == m_Size)
+    {
+        std::array<u8, sizeof(T)> result;
+        std::copy(value.begin(), value.end(), result.data());
+        return std::bit_cast<T>(result);
+    }
+
+    return NULL_OPTION;
+}
+
+template<class T>
+inline [[nodiscard]] Option<T> BlendFieldInfo::GetValue(const Block& block) const
+{
+    return GetValue<T>(block.body);
+}
 
 static constexpr auto BlockFilter(const BlockCode& code)
 {

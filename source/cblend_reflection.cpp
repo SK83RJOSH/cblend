@@ -34,23 +34,10 @@ TypeContainer::operator const Type&() const
     return *m_Pointer;
 }
 
-std::vector<AggregateType::Field> CreateFields(const std::span<const Type* const*> field_types)
-{
-    usize offset = 0;
-    std::vector<AggregateType::Field> fields;
-    fields.reserve(fields.size());
-    for (const auto& field_type : field_types)
-    {
-        fields.push_back({ offset, field_type });
-        offset += (*field_type)->GetSize();
-    }
-    return fields;
-}
-
-AggregateType::AggregateType(usize size, std::string_view name, const std::span<const Type* const*> field_types)
+AggregateType::AggregateType(usize size, std::string_view name, std::vector<AggregateType::Field>& fields)
     : m_Size(size)
     , m_Name(name)
-    , m_Fields(CreateFields(field_types))
+    , m_Fields(fields)
 {
 }
 
@@ -75,16 +62,16 @@ Option<usize> AggregateType::GetFieldOffset(usize field_index) const
     {
         return NULL_OPTION;
     }
-    return m_Fields[field_index].m_Offset;
+    return m_Fields[field_index].offset;
 }
 
-Option<const Type&> AggregateType::GetField(usize field_index) const
+Option<const Type&> AggregateType::GetFieldType(usize field_index) const
 {
     if (field_index >= m_Fields.size())
     {
         return NULL_OPTION;
     }
-    return **m_Fields[field_index].m_Type;
+    return **m_Fields[field_index].type;
 }
 
 CanonicalType AggregateType::GetCanonicalType() const

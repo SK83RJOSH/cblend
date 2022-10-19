@@ -45,5 +45,28 @@ TEST_CASE("default blend file can be read", "[default]")
 
         const auto mesh_type = blend->GetBlockType(*mesh_block);
         REQUIRE(mesh_type != NULL_OPTION);
+
+        const auto fields = mesh_type->GetFields();
+        REQUIRE(fields.size() == 54);
+
+        const auto totvert_field = mesh_type->GetField("totvert");
+        REQUIRE(totvert_field != NULL_OPTION);
+
+        const auto totvert = totvert_field->GetValue<int>(*mesh_block);
+        REQUIRE(totvert == 8);
+
+        const auto vdata_field = mesh_type->GetField("vdata");
+        REQUIRE(vdata_field != NULL_OPTION);
+
+        const auto vdata_data = vdata_field->GetData(*mesh_block);
+        REQUIRE(vdata_data.size() == 248);
+
+        const auto& vdata_field_type = vdata_field->GetFieldType();
+
+        const auto vdata_totlayer_field = vdata_field_type.GetField("totlayer");
+        REQUIRE(vdata_totlayer_field != NULL_OPTION);
+
+        const auto vdata_totlayer = vdata_totlayer_field->GetValue<int>(vdata_data);
+        REQUIRE(vdata_totlayer == 1);
     }
 }

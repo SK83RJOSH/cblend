@@ -5,6 +5,121 @@
 
 using namespace cblend;
 
+MemoryTable::MemoryTable(std::vector<MemoryRange>& ranges) : m_Ranges(std::move(ranges)) {}
+
+std::span<const u8> MemoryTable::GetMemory(u64 address, usize size) const
+{
+    const u64 head = address;
+    const u64 tail = address + size;
+    auto range_contains = [head, tail](const MemoryRange& range)
+    {
+        return range.head <= head && tail <= range.tail;
+    };
+
+    if (auto result = std::ranges::partition_point(m_Ranges, range_contains); result != m_Ranges.end())
+    {
+        return std::span{ result->span.data() + (head - result->head), size };
+    }
+
+    return {};
+}
+
+BlendType::BlendType(const Type& type)
+{
+    if (type.IsPointerType())
+    {
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+        m_ElementType = &reinterpret_cast<const PointerType&>(type).GetPointeeType();
+    }
+    else if (type.IsArrayType())
+    {
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+        m_ElementType = &reinterpret_cast<const ArrayType&>(type).GetElementType();
+    }
+    else if (type.IsAggregateType())
+    {
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+        auto fields = reinterpret_cast<const AggregateType&>(type).GetFields();
+        m_Fields.reserve(fields.size());
+        m_FieldsByName.reserve(fields.size());
+
+        for (const auto& field : fields)
+        {
+            m_Fields.emplace_back(&field);
+            m_FieldsByName.emplace(field.name, &field);
+        }
+    }
+}
+
+[[nodiscard]] bool BlendType::HasElementType() const
+{
+    return m_ElementType != nullptr;
+}
+
+[[nodiscard]] Option<BlendType> BlendType::GetElementType() const
+{
+    if (m_ElementType != nullptr)
+    {
+        const Type& type = *m_ElementType;
+        return BlendType(type);
+    }
+    return NULL_OPTION;
+}
+
+[[nodiscard]] Option<BlendFieldInfo> BlendType::GetField(std::string_view field_name) const
+{
+    if (const auto& field = m_FieldsByName.find(field_name); field != m_FieldsByName.end())
+    {
+        return BlendFieldInfo(*field->second, *this);
+    }
+    return NULL_OPTION;
+}
+
+[[nodiscard]] std::vector<BlendFieldInfo> BlendType::GetFields() const
+{
+    std::vector<BlendFieldInfo> results;
+    results.reserve(m_Fields.size());
+    for (const auto& field : m_Fields)
+    {
+        results.emplace_back(BlendFieldInfo(*field, *this));
+    }
+    return results;
+}
+
+BlendFieldInfo::BlendFieldInfo(const AggregateType::Field& field, const BlendType& declaring_type)
+    : m_Offset(field.offset)
+    , m_Name(field.name)
+    , m_DeclaringType(declaring_type)
+    , m_FieldType(**field.type)
+    , m_Size((*field.type)->GetSize())
+{
+}
+
+[[nodiscard]] std::string_view BlendFieldInfo::GetName() const
+{
+    return m_Name;
+}
+
+[[nodiscard]] const BlendType& BlendFieldInfo::GetDeclaringType() const
+{
+    return m_DeclaringType;
+}
+
+[[nodiscard]] const BlendType& BlendFieldInfo::GetFieldType() const
+{
+    return m_FieldType;
+}
+
+[[nodiscard]] std::span<const u8> BlendFieldInfo::GetData(std::span<const u8> span) const
+{
+    if (m_Offset + m_Size > span.size())
+    {
+        return {};
+    }
+
+    return std::span{ span.data() + m_Offset, m_Size };
+}
+
 bool IsValidName(std::string_view name)
 {
     // Must not be empty
@@ -23,12 +138,12 @@ bool IsValidName(std::string_view name)
     return std::ranges::all_of(name, [](const char chr) { return std::isalpha(chr) != 0 || std::isdigit(chr) != 0 || chr == '_'; });
 }
 
-Result<const Type* const*, ReflectionError>
-ProcessFunctionPointer(std::string_view field_name, usize pointer_size, TypeDatabase::TypeList& types)
+Result<Option<AggregateType::Field>, ReflectionError>
+ProcessFunctionPointerField(usize field_offset, std::string_view field_name, usize pointer_size, TypeDatabase::TypeList& types)
 {
     if (!field_name.starts_with('('))
     {
-        return nullptr;
+        return NULL_OPTION;
     }
 
     static constexpr usize MIN_FUNCTION_POINTER_LENGTH = 5;
@@ -47,7 +162,8 @@ ProcessFunctionPointer(std::string_view field_name, usize pointer_size, TypeData
 
     types.push_back(MakeContainer<FunctionType>(name));
     types.push_back(MakeContainer<PointerType>(&types.back(), pointer_size));
-    return &types.back();
+
+    return AggregateType::Field{ .offset = field_offset, .name = name, .type = &types.back() };
 }
 
 usize CountPointers(std::string_view field_name)
@@ -83,8 +199,13 @@ const Type* const* AddPointers(usize pointer_count, const Type* const* type, usi
     return type;
 }
 
-Result<const Type* const*, ReflectionError>
-ProcessField(std::string_view field_name, usize pointer_size, const Type* const* field_type, TypeDatabase::TypeList& types)
+Result<Option<AggregateType::Field>, ReflectionError> ProcessField(
+    usize field_offset,
+    std::string_view field_name,
+    usize pointer_size,
+    const Type* const* field_type,
+    TypeDatabase::TypeList& types
+)
 {
     const usize pointer_count = CountPointers(field_name);
     const usize name_length = CalculateNameLength(field_name, pointer_count);
@@ -153,7 +274,7 @@ ProcessField(std::string_view field_name, usize pointer_size, const Type* const*
         type = &types.back();
     }
 
-    return AddPointers(pointer_count, type, pointer_size, types);
+    return AggregateType::Field{ .offset = field_offset, .name = name, .type = AddPointers(pointer_count, type, pointer_size, types) };
 }
 
 Result<TypeDatabase, ReflectionError> CreateTypeDatabase(const File& file, const Sdna& sdna)
@@ -187,10 +308,11 @@ Result<TypeDatabase, ReflectionError> CreateTypeDatabase(const File& file, const
             return MakeError(ReflectionError::InvalidSdnaStruct);
         }
 
-        type_database.struct_map.emplace(++struct_index, type_index);
+        type_database.struct_map.emplace(struct_index++, type_index);
 
         const usize field_count = fields.size();
-        std::vector<const Type* const*> aggregate_fields;
+        usize field_offset = 0;
+        std::vector<AggregateType::Field> aggregate_fields;
         aggregate_fields.reserve(field_count);
 
         for (const auto& [field_type_index, field_name_index] : fields)
@@ -203,29 +325,33 @@ Result<TypeDatabase, ReflectionError> CreateTypeDatabase(const File& file, const
             const auto& field_name = sdna.field_names[field_name_index];
 
             // Handle function pointers such as: (*field_name)()
-            if (const auto type = ProcessFunctionPointer(field_name, pointer_size, type_database.type_list); *type != nullptr)
+            if (const auto field = ProcessFunctionPointerField(field_offset, field_name, pointer_size, type_database.type_list);
+                *field != NULL_OPTION)
             {
-                aggregate_fields.push_back(*type);
+                field_offset += (*(*field)->type)->GetSize();
+                aggregate_fields.push_back(**field);
                 continue;
             }
             // NOLINTNEXTLINE(readability-else-after-return)
-            else if (!type.has_value())
+            else if (!field.has_value())
             {
-                return MakeError(type.error());
+                return MakeError(field.error());
             }
 
             const auto& field_type = type_database.type_list[field_type_index];
 
             // Handle generic fields such as: **field_name[1][2]
-            if (const auto type = ProcessField(field_name, pointer_size, &field_type, type_database.type_list); *type != nullptr)
+            if (const auto field = ProcessField(field_offset, field_name, pointer_size, &field_type, type_database.type_list);
+                *field != NULL_OPTION)
             {
-                aggregate_fields.push_back(*type);
+                field_offset += (*(*field)->type)->GetSize();
+                aggregate_fields.push_back(**field);
                 continue;
             }
             // NOLINTNEXTLINE(readability-else-after-return)
-            else if (!type.has_value())
+            else if (!field.has_value())
             {
-                return MakeError(type.error());
+                return MakeError(field.error());
             }
 
             return MakeError(ReflectionError::InvalidSdnaField);
@@ -343,13 +469,13 @@ Result<const Blend, BlendError> Blend::Open(std::string_view path)
     return NULL_OPTION;
 }
 
-Option<const Type&> cblend::Blend::GetBlockType(const Block& block) const
+Option<BlendType> cblend::Blend::GetBlockType(const Block& block) const
 {
     if (const auto& type_index = m_TypeDatabase.struct_map.find(block.header.struct_index);
         type_index != m_TypeDatabase.struct_map.end() && type_index->second < m_TypeDatabase.type_list.size() && type_index->second > 0)
     {
         const Type& result = m_TypeDatabase.type_list[type_index->second];
-        return result;
+        return BlendType(result);
     }
     return NULL_OPTION;
 }
@@ -359,23 +485,4 @@ Blend::Blend(File& file, TypeDatabase& type_database, MemoryTable& memory_table)
     , m_TypeDatabase(std::move(type_database))
     , m_MemoryTable(memory_table)
 {
-}
-
-MemoryTable::MemoryTable(std::vector<MemoryRange>& ranges) : m_Ranges(std::move(ranges)) {}
-
-std::span<const u8> MemoryTable::GetMemory(u64 address, usize size) const
-{
-    const u64 head = address;
-    const u64 tail = address + size;
-    auto range_contains = [head, tail](const MemoryRange& range)
-    {
-        return range.head <= head && tail <= range.tail;
-    };
-
-    if (auto result = std::ranges::partition_point(m_Ranges, range_contains); result != m_Ranges.end())
-    {
-        return std::span{ result->span.data() + (head - result->head), size };
-    }
-
-    return {};
 }
