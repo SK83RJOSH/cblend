@@ -205,7 +205,7 @@ inline Option<T*> BlendFieldInfo::GetPointer(const Block& block) const
 template<class T>
 inline Option<T> BlendFieldInfo::GetPointerValue(std::span<const u8> span) const
 {
-    if (auto value = GetPointer(span))
+    if (auto value = GetPointer<T>(span))
     {
         return **value;
     }
