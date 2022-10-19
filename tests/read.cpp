@@ -1,9 +1,16 @@
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cblend.hpp>
 
-#include <filesystem>
-
 using namespace cblend;
+
+struct Vertex
+{
+    float x;
+    float y;
+    float z;
+    u32 pad;
+};
 
 // NOLINTBEGIN(readability-function-cognitive-complexity)
 TEST_CASE("default blend file can be read", "[default]")
@@ -68,5 +75,45 @@ TEST_CASE("default blend file can be read", "[default]")
 
         const auto vdata_totlayer = vdata_totlayer_field->GetValue<int>(vdata_data);
         REQUIRE(vdata_totlayer == 1);
+
+        const auto vdata_layers_field = vdata_field_type.GetField("layers");
+        REQUIRE(vdata_layers_field != NULL_OPTION);
+
+        const auto vdata_layers_data = vdata_layers_field->GetPointerData(vdata_data);
+        REQUIRE(vdata_layers_data.size() == 112);
+
+        const auto vdata_layers_element_type = vdata_layers_field->GetFieldType().GetElementType();
+        REQUIRE(vdata_layers_element_type != NULL_OPTION);
+
+        const auto vdata_layers_type_field = vdata_layers_element_type->GetField("type");
+        REQUIRE(vdata_layers_type_field != NULL_OPTION);
+
+        const auto vdata_layers_type_data = vdata_layers_type_field->GetValue<int>(vdata_layers_data);
+        REQUIRE(vdata_layers_type_data == 0);
+
+        const auto vdata_layers_data_field = vdata_layers_element_type->GetField("data");
+        REQUIRE(vdata_layers_data_field != NULL_OPTION);
+
+        const auto vdata_layers_data_data = vdata_layers_data_field->GetPointerData(vdata_layers_data);
+        REQUIRE(vdata_layers_data_data.data() != nullptr);
+
+        // NOLINTBEGIN
+        const auto* vertex = reinterpret_cast<const Vertex*>(vdata_layers_data_data.data());
+        REQUIRE((vertex->x == Catch::Approx(1) && vertex->y == Catch::Approx(1) && vertex->z == Catch::Approx(1)));
+        ++vertex;
+        REQUIRE((vertex->x == Catch::Approx(1) && vertex->y == Catch::Approx(1) && vertex->z == Catch::Approx(-1)));
+        ++vertex;
+        REQUIRE((vertex->x == Catch::Approx(1) && vertex->y == Catch::Approx(-1) && vertex->z == Catch::Approx(1)));
+        ++vertex;
+        REQUIRE((vertex->x == Catch::Approx(1) && vertex->y == Catch::Approx(-1) && vertex->z == Catch::Approx(-1)));
+        ++vertex;
+        REQUIRE((vertex->x == Catch::Approx(-1) && vertex->y == Catch::Approx(1) && vertex->z == Catch::Approx(1)));
+        ++vertex;
+        REQUIRE((vertex->x == Catch::Approx(-1) && vertex->y == Catch::Approx(1) && vertex->z == Catch::Approx(-1)));
+        ++vertex;
+        REQUIRE((vertex->x == Catch::Approx(-1) && vertex->y == Catch::Approx(-1) && vertex->z == Catch::Approx(1)));
+        ++vertex;
+        REQUIRE((vertex->x == Catch::Approx(-1) && vertex->y == Catch::Approx(-1) && vertex->z == Catch::Approx(-1)));
+        // NOLINTEND
     }
 }

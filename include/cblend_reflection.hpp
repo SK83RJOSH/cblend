@@ -32,6 +32,7 @@ public:
     [[nodiscard]] bool IsAggregateType() const;
     [[nodiscard]] bool IsArrayType() const;
     [[nodiscard]] bool IsFunctionType() const;
+    [[nodiscard]] bool IsFundamentalType() const;
     [[nodiscard]] bool IsPointerType() const;
 
 protected:

@@ -13,10 +13,11 @@ std::span<const u8> MemoryTable::GetMemory(u64 address, usize size) const
     const u64 tail = address + size;
     auto range_contains = [head, tail](const MemoryRange& range)
     {
-        return range.head <= head && tail <= range.tail;
+        return range.head <= head && range.tail >= tail;
     };
 
-    if (auto result = std::ranges::partition_point(m_Ranges, range_contains); result != m_Ranges.end())
+    // TODO: Figure out how to use partition_point here...
+    if (auto result = std::ranges::find_if(m_Ranges, range_contains); result != m_Ranges.end())
     {
         return std::span{ result->span.data() + (head - result->head), size };
     }
@@ -24,19 +25,21 @@ std::span<const u8> MemoryTable::GetMemory(u64 address, usize size) const
     return {};
 }
 
-BlendType::BlendType(const Type& type)
+BlendType::BlendType(const MemoryTable& memory_table, const Type& type) : m_MemoryTable(memory_table), m_Type(type)
 {
-    if (type.IsPointerType())
+    if (IsPointer())
     {
         // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
         m_ElementType = &reinterpret_cast<const PointerType&>(type).GetPointeeType();
     }
-    else if (type.IsArrayType())
+    else if (IsArray())
     {
         // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-        m_ElementType = &reinterpret_cast<const ArrayType&>(type).GetElementType();
+        const auto& array = reinterpret_cast<const ArrayType&>(type);
+        m_ElementType = &array.GetElementType();
+        m_ArrayRank = array.GetElementCount();
     }
-    else if (type.IsAggregateType())
+    else if (IsStruct())
     {
         // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
         auto fields = reinterpret_cast<const AggregateType&>(type).GetFields();
@@ -51,6 +54,31 @@ BlendType::BlendType(const Type& type)
     }
 }
 
+[[nodiscard]] bool BlendType::IsArray() const
+{
+    return m_Type.IsArrayType();
+}
+
+[[nodiscard]] bool BlendType::IsPointer() const
+{
+    return m_Type.IsPointerType();
+}
+
+[[nodiscard]] bool BlendType::IsPrimitive() const
+{
+    return m_Type.IsFundamentalType();
+}
+
+[[nodiscard]] bool BlendType::IsStruct() const
+{
+    return m_Type.IsAggregateType();
+}
+
+[[nodiscard]] usize BlendType::GetSize() const
+{
+    return m_Type.GetSize();
+}
+
 [[nodiscard]] bool BlendType::HasElementType() const
 {
     return m_ElementType != nullptr;
@@ -61,7 +89,7 @@ BlendType::BlendType(const Type& type)
     if (m_ElementType != nullptr)
     {
         const Type& type = *m_ElementType;
-        return BlendType(type);
+        return BlendType(m_MemoryTable, type);
     }
     return NULL_OPTION;
 }
@@ -70,7 +98,7 @@ BlendType::BlendType(const Type& type)
 {
     if (const auto& field = m_FieldsByName.find(field_name); field != m_FieldsByName.end())
     {
-        return BlendFieldInfo(*field->second, *this);
+        return BlendFieldInfo(m_MemoryTable, *field->second, *this);
     }
     return NULL_OPTION;
 }
@@ -81,16 +109,17 @@ BlendType::BlendType(const Type& type)
     results.reserve(m_Fields.size());
     for (const auto& field : m_Fields)
     {
-        results.emplace_back(BlendFieldInfo(*field, *this));
+        results.emplace_back(BlendFieldInfo(m_MemoryTable, *field, *this));
     }
     return results;
 }
 
-BlendFieldInfo::BlendFieldInfo(const AggregateType::Field& field, const BlendType& declaring_type)
-    : m_Offset(field.offset)
+BlendFieldInfo::BlendFieldInfo(const MemoryTable& memory_table, const AggregateType::Field& field, const BlendType& declaring_type)
+    : m_MemoryTable(memory_table)
+    , m_Offset(field.offset)
     , m_Name(field.name)
     , m_DeclaringType(declaring_type)
-    , m_FieldType(**field.type)
+    , m_FieldType(m_MemoryTable, **field.type)
     , m_Size((*field.type)->GetSize())
 {
 }
@@ -123,6 +152,38 @@ BlendFieldInfo::BlendFieldInfo(const AggregateType::Field& field, const BlendTyp
 [[nodiscard]] std::span<const u8> BlendFieldInfo::GetData(const Block& block) const
 {
     return GetData(block.body);
+}
+
+std::span<const u8> BlendFieldInfo::GetPointerData(std::span<const u8> span) const
+{
+    if (!m_FieldType.IsPointer())
+    {
+        return {};
+    }
+
+    if (auto value = GetData(span); value.size() == m_Size)
+    {
+        if (m_Size == sizeof(u64))
+        {
+            std::array<u8, sizeof(u64)> result = {};
+            std::copy(value.begin(), value.end(), result.data());
+            return m_MemoryTable.GetMemory(std::bit_cast<u64>(result), m_FieldType.GetElementType()->GetSize());
+        }
+
+        if (m_Size == sizeof(u32))
+        {
+            std::array<u8, sizeof(u32)> result = {};
+            std::copy(value.begin(), value.end(), result.data());
+            return m_MemoryTable.GetMemory(std::bit_cast<u32>(result), m_FieldType.GetElementType()->GetSize());
+        }
+    }
+
+    return {};
+}
+
+std::span<const u8> BlendFieldInfo::GetPointerData(const Block& block) const
+{
+    return GetPointerData(block.body);
 }
 
 bool IsValidName(std::string_view name)
@@ -480,7 +541,7 @@ Option<BlendType> cblend::Blend::GetBlockType(const Block& block) const
         type_index != m_TypeDatabase.struct_map.end() && type_index->second < m_TypeDatabase.type_list.size() && type_index->second > 0)
     {
         const Type& result = m_TypeDatabase.type_list[type_index->second];
-        return BlendType(result);
+        return BlendType(m_MemoryTable, result);
     }
     return NULL_OPTION;
 }

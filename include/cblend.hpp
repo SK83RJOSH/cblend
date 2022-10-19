@@ -55,9 +55,16 @@ class BlendFieldInfo;
 class BlendType
 {
 public:
-    BlendType(const Type& type);
+    BlendType(const MemoryTable& memory_table, const Type& type);
 
     inline bool operator==(const BlendType& rhs) const = default;
+
+    [[nodiscard]] bool IsArray() const;
+    [[nodiscard]] bool IsPointer() const;
+    [[nodiscard]] bool IsPrimitive() const;
+    [[nodiscard]] bool IsStruct() const;
+
+    [[nodiscard]] usize GetSize() const;
 
     [[nodiscard]] bool HasElementType() const;
     [[nodiscard]] Option<BlendType> GetElementType() const;
@@ -66,7 +73,10 @@ public:
     [[nodiscard]] std::vector<BlendFieldInfo> GetFields() const;
 
 private:
+    const MemoryTable& m_MemoryTable;
+    const Type& m_Type;
     const Type* m_ElementType = nullptr;
+    usize m_ArrayRank = 0U;
     std::vector<const AggregateType::Field*> m_Fields;
     std::unordered_map<std::string_view, const AggregateType::Field*> m_FieldsByName;
 };
@@ -74,7 +84,7 @@ private:
 class BlendFieldInfo
 {
 public:
-    BlendFieldInfo(const AggregateType::Field& field, const BlendType& declaring_type);
+    BlendFieldInfo(const MemoryTable& memory_table, const AggregateType::Field& field, const BlendType& declaring_type);
 
     inline bool operator==(const BlendFieldInfo& rhs) const = default;
 
@@ -85,12 +95,26 @@ public:
     [[nodiscard]] std::span<const u8> GetData(std::span<const u8> span) const;
     [[nodiscard]] std::span<const u8> GetData(const Block& block) const;
 
+    [[nodiscard]] std::span<const u8> GetPointerData(std::span<const u8> span) const;
+    [[nodiscard]] std::span<const u8> GetPointerData(const Block& block) const;
+
     template<class T>
     [[nodiscard]] Option<T> GetValue(std::span<const u8> span) const;
     template<class T>
     [[nodiscard]] Option<T> GetValue(const Block& block) const;
 
+    template<class T>
+    [[nodiscard]] Option<T*> GetPointer(std::span<const u8> span) const;
+    template<class T>
+    [[nodiscard]] Option<T*> GetPointer(const Block& block) const;
+
+    template<class T>
+    [[nodiscard]] Option<T> GetPointerValue(std::span<const u8> span) const;
+    template<class T>
+    [[nodiscard]] Option<T> GetPointerValue(const Block& block) const;
+
 private:
+    const MemoryTable& m_MemoryTable;
     usize m_Offset;
     std::string_view m_Name;
     const BlendType& m_DeclaringType;
@@ -127,7 +151,7 @@ inline Option<T> MemoryTable::GetMemory(u64 address) const
 {
     if (auto result = GetMemory(address, sizeof(T)); !result.empty())
     {
-        std::array<u8, sizeof(T)> value;
+        std::array<u8, sizeof(T)> value = {};
         std::copy(result.begin(), result.end(), value.data());
         return std::bit_cast<T>(value);
     }
@@ -144,7 +168,7 @@ inline Option<T> BlendFieldInfo::GetValue(std::span<const u8> span) const
 
     if (auto value = GetData(span); value.size() == m_Size)
     {
-        std::array<u8, sizeof(T)> result;
+        std::array<u8, sizeof(T)> result = {};
         std::copy(value.begin(), value.end(), result.data());
         return std::bit_cast<T>(result);
     }
@@ -156,6 +180,43 @@ template<class T>
 inline Option<T> BlendFieldInfo::GetValue(const Block& block) const
 {
     return GetValue<T>(block.body);
+}
+
+template<class T>
+inline Option<T*> BlendFieldInfo::GetPointer(std::span<const u8> span) const
+{
+    std::span<const u8> data = GetPointerData(span);
+
+    if (data.size() == sizeof(T))
+    {
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+        return reinterpret_cast<T*>(data.data());
+    }
+
+    return NULL_OPTION;
+}
+
+template<class T>
+inline Option<T*> BlendFieldInfo::GetPointer(const Block& block) const
+{
+    return GetPointer<T>(block.body);
+}
+
+template<class T>
+inline Option<T> BlendFieldInfo::GetPointerValue(std::span<const u8> span) const
+{
+    if (auto value = GetPointer(span))
+    {
+        return **value;
+    }
+
+    return NULL_OPTION;
+}
+
+template<class T>
+inline Option<T> BlendFieldInfo::GetPointerValue(const Block& block) const
+{
+    return GetPointerValue<T>(block.body);
 }
 
 static constexpr auto BlockFilter(const BlockCode& code)

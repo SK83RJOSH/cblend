@@ -17,6 +17,11 @@ bool Type::IsFunctionType() const
     return GetCanonicalType() == CanonicalType::Function;
 }
 
+bool Type::IsFundamentalType() const
+{
+    return GetCanonicalType() == CanonicalType::Fundamental;
+}
+
 bool Type::IsPointerType() const
 {
     return GetCanonicalType() == CanonicalType::Pointer;
