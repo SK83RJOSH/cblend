@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cblend_format.hpp>
+#include <cblend_query.hpp>
 #include <cblend_reflection.hpp>
 #include <cblend_stream.hpp>
 
