@@ -74,7 +74,7 @@ TEST_CASE("default blend file can be read", "[default]")
         }
     }
 
-    SECTION("mesh data can be read successfully")
+    SECTION("mesh data can be read via reflection")
     {
         const auto mesh_block = blend->GetBlock(BLOCK_CODE_ME);
         REQUIRE(mesh_block != NULL_OPTION);
@@ -127,22 +127,47 @@ TEST_CASE("default blend file can be read", "[default]")
         REQUIRE(vdata_layers_data_data.data() != nullptr);
 
         // NOLINTBEGIN
-        const auto* vertex = reinterpret_cast<const Vertex*>(vdata_layers_data_data.data());
-        REQUIRE((vertex->x == Catch::Approx(1) && vertex->y == Catch::Approx(1) && vertex->z == Catch::Approx(1)));
-        ++vertex;
-        REQUIRE((vertex->x == Catch::Approx(1) && vertex->y == Catch::Approx(1) && vertex->z == Catch::Approx(-1)));
-        ++vertex;
-        REQUIRE((vertex->x == Catch::Approx(1) && vertex->y == Catch::Approx(-1) && vertex->z == Catch::Approx(1)));
-        ++vertex;
-        REQUIRE((vertex->x == Catch::Approx(1) && vertex->y == Catch::Approx(-1) && vertex->z == Catch::Approx(-1)));
-        ++vertex;
-        REQUIRE((vertex->x == Catch::Approx(-1) && vertex->y == Catch::Approx(1) && vertex->z == Catch::Approx(1)));
-        ++vertex;
-        REQUIRE((vertex->x == Catch::Approx(-1) && vertex->y == Catch::Approx(1) && vertex->z == Catch::Approx(-1)));
-        ++vertex;
-        REQUIRE((vertex->x == Catch::Approx(-1) && vertex->y == Catch::Approx(-1) && vertex->z == Catch::Approx(1)));
-        ++vertex;
-        REQUIRE((vertex->x == Catch::Approx(-1) && vertex->y == Catch::Approx(-1) && vertex->z == Catch::Approx(-1)));
+        const auto* vertices = reinterpret_cast<const Vertex(*)[8]>(vdata_layers_data_data.data());
+        REQUIRE(vertices != nullptr);
+        REQUIRE(((*vertices)[0].x == Catch::Approx(1) && (*vertices)[0].y == Catch::Approx(1) && (*vertices)[0].z == Catch::Approx(1)));
+        REQUIRE(((*vertices)[1].x == Catch::Approx(1) && (*vertices)[1].y == Catch::Approx(1) && (*vertices)[1].z == Catch::Approx(-1)));
+        REQUIRE(((*vertices)[2].x == Catch::Approx(1) && (*vertices)[2].y == Catch::Approx(-1) && (*vertices)[2].z == Catch::Approx(1)));
+        REQUIRE(((*vertices)[3].x == Catch::Approx(1) && (*vertices)[3].y == Catch::Approx(-1) && (*vertices)[3].z == Catch::Approx(-1)));
+        REQUIRE(((*vertices)[4].x == Catch::Approx(-1) && (*vertices)[4].y == Catch::Approx(1) && (*vertices)[4].z == Catch::Approx(1)));
+        REQUIRE(((*vertices)[5].x == Catch::Approx(-1) && (*vertices)[5].y == Catch::Approx(1) && (*vertices)[5].z == Catch::Approx(-1)));
+        REQUIRE(((*vertices)[6].x == Catch::Approx(-1) && (*vertices)[6].y == Catch::Approx(-1) && (*vertices)[6].z == Catch::Approx(1)));
+        REQUIRE(((*vertices)[7].x == Catch::Approx(-1) && (*vertices)[7].y == Catch::Approx(-1) && (*vertices)[7].z == Catch::Approx(-1)));
+        // NOLINTEND
+    }
+
+    SECTION("mesh data can be read via reflection queries")
+    {
+        const auto mesh_block = blend->GetBlock(BLOCK_CODE_ME);
+        REQUIRE(mesh_block != NULL_OPTION);
+
+        const auto mesh_type = blend->GetBlockType(*mesh_block);
+        REQUIRE(mesh_type != NULL_OPTION);
+
+        const auto totvert = mesh_type->QueryValue<int, "totvert">(*mesh_block);
+        REQUIRE(totvert == 8);
+
+        const auto totlayer = mesh_type->QueryValue<int, "vdata.totlayer">(*mesh_block);
+        REQUIRE(totlayer == 1);
+
+        const auto layer_type = mesh_type->QueryValue<int, "vdata.layers[0].type">(*mesh_block);
+        REQUIRE(layer_type == 0);
+
+        // NOLINTBEGIN
+        const auto vertices = mesh_type->QueryValue<const Vertex(*)[8], "vdata.layers[0].data[0]">(*mesh_block);
+        REQUIRE((vertices != NULL_OPTION && *vertices != nullptr));
+        REQUIRE(((**vertices)[0].x == Catch::Approx(1) && (**vertices)[0].y == Catch::Approx(1) && (**vertices)[0].z == Catch::Approx(1)));
+        REQUIRE(((**vertices)[1].x == Catch::Approx(1) && (**vertices)[1].y == Catch::Approx(1) && (**vertices)[1].z == Catch::Approx(-1)));
+        REQUIRE(((**vertices)[2].x == Catch::Approx(1) && (**vertices)[2].y == Catch::Approx(-1) && (**vertices)[2].z == Catch::Approx(1)));
+        REQUIRE(((**vertices)[3].x == Catch::Approx(1) && (**vertices)[3].y == Catch::Approx(-1) && (**vertices)[3].z == Catch::Approx(-1)));
+        REQUIRE(((**vertices)[4].x == Catch::Approx(-1) && (**vertices)[4].y == Catch::Approx(1) && (**vertices)[4].z == Catch::Approx(1)));
+        REQUIRE(((**vertices)[5].x == Catch::Approx(-1) && (**vertices)[5].y == Catch::Approx(1) && (**vertices)[5].z == Catch::Approx(-1)));
+        REQUIRE(((**vertices)[6].x == Catch::Approx(-1) && (**vertices)[6].y == Catch::Approx(-1) && (**vertices)[6].z == Catch::Approx(1)));
+        REQUIRE(((**vertices)[7].x == Catch::Approx(-1) && (**vertices)[7].y == Catch::Approx(-1) && (**vertices)[7].z == Catch::Approx(-1)));
         // NOLINTEND
     }
 }

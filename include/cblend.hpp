@@ -73,6 +73,11 @@ public:
     [[nodiscard]] Option<BlendFieldInfo> GetField(std::string_view field_name) const;
     [[nodiscard]] std::vector<BlendFieldInfo> GetFields() const;
 
+    template<class T>
+    [[nodiscard]] Option<T> QueryValue(const Block& block, const Query& query) const;
+    template<class T, QueryString Input>
+    [[nodiscard]] Option<T> QueryValue(const Block& block) const;
+
 private:
     const MemoryTable& m_MemoryTable;
     const Type& m_Type;
@@ -157,6 +162,101 @@ inline Option<T> MemoryTable::GetMemory(u64 address) const
         return std::bit_cast<T>(value);
     }
     return NULL_OPTION;
+}
+
+template<class T>
+inline Option<T> BlendType::QueryValue(const Block& block, const Query& query) const
+{
+    std::span<const u8> struct_data = block.body;
+    std::unique_ptr<BlendFieldInfo> field_info = nullptr;
+    std::span<const u8> field_data = block.body;
+    std::unique_ptr<BlendType> type = std::make_unique<BlendType>(*this);
+
+    for (const auto& token : query)
+    {
+        if (const auto* index = std::get_if<usize>(&token); index != nullptr && field_info != nullptr)
+        {
+            const auto element_type = type->GetElementType();
+            if (!element_type)
+            {
+                // INDEXED_NON_ARRAY_OR_NON_POINTER
+                return NULL_OPTION;
+            }
+            if (type->IsPointer())
+            {
+                type = std::make_unique<BlendType>(*element_type);
+                field_data = field_info->GetPointerData(struct_data);
+                if (field_data.data() != nullptr)
+                {
+                    field_data = std::span{ field_data.data() + (*index * field_data.size()), field_data.size() };
+                }
+            }
+            else
+            {
+                type = std::make_unique<BlendType>(*element_type);
+                return NULL_OPTION;
+            }
+        }
+        else if (const auto* field_name = std::get_if<std::string_view>(&token); field_name != nullptr && type != nullptr)
+        {
+            if (type->IsStruct())
+            {
+                const auto info = type->GetField(*field_name);
+                if (!info)
+                {
+                    // FIELD_NOT_FOUND
+                    return NULL_OPTION;
+                }
+                struct_data = field_data;
+                field_info = std::make_unique<BlendFieldInfo>(*info);
+                field_data = field_info->GetData(field_data);
+                type = std::make_unique<BlendType>(field_info->GetFieldType());
+            }
+            else
+            {
+                // INDEXED_NON_STRUCT
+                return NULL_OPTION;
+            }
+        }
+        else
+        {
+            // QUERY_INVALID
+            return NULL_OPTION;
+        }
+    }
+
+    if constexpr (std::is_pointer_v<T>)
+    {
+        if (field_data.data() == nullptr || (field_data.size() != 0 && field_data.size() != sizeof(std::remove_pointer_t<T>)))
+        {
+            // INVALID_TYPE
+            return NULL_OPTION;
+        }
+        return reinterpret_cast<T>(field_data.data());
+    }
+    else
+    {
+        if (field_data.size() != sizeof(T))
+        {
+            // INVALID_TYPE
+            return NULL_OPTION;
+        }
+
+        std::array<u8, sizeof(T)> result = {};
+        std::copy(field_data.begin(), field_data.end(), result.data());
+        return std::bit_cast<T>(result);
+    }
+}
+
+template<class T, QueryString Input>
+inline Option<T> BlendType::QueryValue(const Block& block) const
+{
+    const auto query = Query::Create<Input>();
+    if (!query)
+    {
+        return NULL_OPTION;
+    }
+    return QueryValue<T>(block, *query);
 }
 
 template<class T>

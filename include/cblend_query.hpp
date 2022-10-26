@@ -285,6 +285,13 @@ public:
     usize GetTokenCount() const;
     Option<QueryToken> GetToken(usize token_index) const;
 
+    constexpr auto begin() noexcept { return m_Tokens.begin(); }
+    constexpr auto end() noexcept { return m_Tokens.end(); }
+    constexpr auto begin() const noexcept { return m_Tokens.begin(); }
+    constexpr auto end() const noexcept { return m_Tokens.end(); }
+    constexpr auto cbegin() const noexcept { return m_Tokens.cbegin(); }
+    constexpr auto cend() const noexcept { return m_Tokens.cend(); }
+
 private:
     QueryTokens m_Tokens;
 };
