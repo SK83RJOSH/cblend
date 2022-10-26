@@ -1,25 +1,15 @@
 #include <cblend_query.hpp>
 
-#include <algorithm>
 #include <cctype>
-#include <charconv>
 #include <limits>
 #include <ranges>
 
 using namespace cblend;
 
-[[nodiscard]] Option<std::string> AsNamed(std::string_view input)
+[[nodiscard]] Option<std::string_view> AsName(std::string_view input)
 {
-    // Smallest possible named is .a
-    if (input.size() < 2)
-    {
-        return NULL_OPTION;
-    }
-
-    const std::string_view name = std::string_view(input.data() + 1, input.size() - 1);
-
     // Must begin with A-Z or _
-    if (std::isalpha(name[0]) == 0 && name[0] != '_')
+    if (input.empty() || std::isalpha(input[0]) == 0 && input[0] != '_')
     {
         return NULL_OPTION;
     }
@@ -30,33 +20,28 @@ using namespace cblend;
         return std::isalpha(chr) != 0 || std::isdigit(chr) != 0 || chr == '_';
     };
 
-    if (!std::ranges::all_of(name, valid_character))
+    if (!std::ranges::all_of(input, valid_character))
     {
         return NULL_OPTION;
     }
 
-    return std::string(name);
+    return input;
 }
 
 [[nodiscard]] Option<usize> AsIndex(std::string_view input)
 {
-    // Smallest possible index is [1]
-    if (input.size() < 3)
-    {
-        return NULL_OPTION;
-    }
+    constexpr auto MAX_DIGITS = std::numeric_limits<usize>::digits10;
 
-    // Substract the added length of '[' and ']'
-    if (input.size() - 2 > std::numeric_limits<usize>::max_digits10)
+    if (input.empty() || input.size() > MAX_DIGITS)
     {
         return NULL_OPTION;
     }
 
     usize result(0);
     usize multiplier(1);
-    for (const char character : std::string_view{ input.data() + 1, input.size() - 2 })
+    for (const char character : input)
     {
-        static constexpr usize BASE(10);
+        constexpr usize BASE(10);
         if (std::isdigit(character) == 0)
         {
             return NULL_OPTION;
@@ -67,50 +52,40 @@ using namespace cblend;
     return result;
 };
 
-[[nodiscard]] std::string_view::iterator FindNextToken(std::string_view::iterator head, std::string_view::iterator tail)
-{
-    while (head != tail && *head != '.' && *head != '[')
+Result<Query, QueryError> Query::Create(std::span<std::string_view> tokens) {
+    Query result = {};
+    result.m_Tokens.reserve(tokens.size());
+
+    for (const auto& token : tokens)
     {
-        head++;
+        if (auto name_token = AsName(token))
+        {
+            result.m_Tokens.push_back(*name_token);
+        }
+        else if (auto index_token = AsIndex(token))
+        {
+            result.m_Tokens.push_back(*index_token);
+        }
     }
 
-    return head;
+    if (result.m_Tokens.empty() || result.m_Tokens.size() != tokens.size())
+    {
+        return MakeError(QueryError::InvalidQueryString);
+    }
+
+    return result;
 }
 
-Option<std::vector<QueryToken>> QueryBuilder::Tokenize(std::string_view query_string)
+usize Query::GetTokenCount() const
 {
-    std::vector<QueryToken> tokens;
+    return m_Tokens.size();
+}
 
-    if (!query_string.empty())
-    {
-        auto token_head = query_string.begin();
-        auto token_tail = FindNextToken(token_head, query_string.end());
-
-        do {
-            std::string_view value(token_head, token_tail);
-
-            if (auto token = AsNamed(value))
-            {
-                tokens.emplace_back(*token);
-            }
-            else if (auto token = AsIndex(value))
-            {
-                tokens.emplace_back(*token);
-            }
-            else
-            {
-                return NULL_OPTION;
-            }
-
-            token_head = token_tail;
-            token_tail = FindNextToken(token_head, query_string.end());
-        } while (token_tail != query_string.end());
-    }
-
-    if (tokens.empty())
+Option<QueryToken> Query::GetToken(usize token_index) const
+{
+    if (token_index >= m_Tokens.size())
     {
         return NULL_OPTION;
     }
-
-    return tokens;
-};
+    return m_Tokens[token_index];
+}

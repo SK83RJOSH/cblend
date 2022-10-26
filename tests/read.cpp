@@ -4,6 +4,35 @@
 
 using namespace cblend;
 
+// NOLINTBEGIN(readability-function-cognitive-complexity)
+TEST_CASE("queries can be created", "[default]")
+// NOLINTEND(readability-function-cognitive-complexity)
+{
+    constexpr Option<QueryToken> EXPECTED_NAME_TOKEN("m_test");
+    constexpr Option<QueryToken> EXPECTED_INDEX_TOKEN(0U);
+
+    const auto invalid_query = Query::Create<"">();
+    REQUIRE(!invalid_query);
+
+    const auto name_query = Query::Create<"m_test">();
+    REQUIRE(name_query);
+    REQUIRE(name_query->GetTokenCount() == 1U);
+    REQUIRE(name_query->GetToken(0) == EXPECTED_NAME_TOKEN);
+    REQUIRE(name_query->GetToken(1) == NULL_OPTION);
+
+    const auto index_query = Query::Create<"[0]">();
+    REQUIRE(index_query);
+    REQUIRE(index_query->GetTokenCount() == 1U);
+    REQUIRE(index_query->GetToken(0) == EXPECTED_INDEX_TOKEN);
+
+    const auto composite_query = Query::Create<"m_test.m_test[0]">();
+    REQUIRE(composite_query);
+    REQUIRE(composite_query->GetTokenCount() == 3U);
+    REQUIRE(composite_query->GetToken(0) == EXPECTED_NAME_TOKEN);
+    REQUIRE(composite_query->GetToken(1) == EXPECTED_NAME_TOKEN);
+    REQUIRE(composite_query->GetToken(2) == EXPECTED_INDEX_TOKEN);
+}
+
 struct Vertex
 {
     float x;
