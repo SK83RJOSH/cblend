@@ -94,6 +94,11 @@ BlendType::BlendType(const MemoryTable& memory_table, const Type& type) : m_Memo
     return NULL_OPTION;
 }
 
+[[nodiscard]] usize BlendType::GetArrayRank() const
+{
+    return m_ArrayRank;
+}
+
 [[nodiscard]] Option<BlendFieldInfo> BlendType::GetField(std::string_view field_name) const
 {
     if (const auto& field = m_FieldsByName.find(field_name); field != m_FieldsByName.end())

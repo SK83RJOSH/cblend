@@ -9,7 +9,7 @@ bool Type::IsAggregateType() const
 
 bool Type::IsArrayType() const
 {
-    return GetCanonicalType() == CanonicalType::Pointer;
+    return GetCanonicalType() == CanonicalType::Array;
 }
 
 bool Type::IsFunctionType() const

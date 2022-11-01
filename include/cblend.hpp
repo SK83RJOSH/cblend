@@ -70,6 +70,8 @@ public:
     [[nodiscard]] bool HasElementType() const;
     [[nodiscard]] Option<BlendType> GetElementType() const;
 
+    [[nodiscard]] usize GetArrayRank() const;
+
     [[nodiscard]] Option<BlendFieldInfo> GetField(std::string_view field_name) const;
     [[nodiscard]] std::vector<BlendFieldInfo> GetFields() const;
 
@@ -177,46 +179,60 @@ inline Option<T> BlendType::QueryValue(const Block& block, const Query& query) c
         if (const auto* index = std::get_if<usize>(&token); index != nullptr && field_info != nullptr)
         {
             const auto element_type = type->GetElementType();
+
             if (!element_type)
             {
-                // INDEXED_NON_ARRAY_OR_NON_POINTER
+                // INDEXED_INVALID_TYPE
                 return NULL_OPTION;
             }
+
             if (type->IsPointer())
             {
-                type = std::make_unique<BlendType>(*element_type);
                 field_data = field_info->GetPointerData(struct_data);
-                if (field_data.data() != nullptr)
-                {
-                    field_data = std::span{ field_data.data() + (*index * field_data.size()), field_data.size() };
-                }
             }
             else
             {
-                type = std::make_unique<BlendType>(*element_type);
+                field_data = field_info->GetData(struct_data);
+            }
+
+            if (field_data.data() == nullptr)
+            {
+                // INVALID_ARRAY_OR_POINTER
                 return NULL_OPTION;
             }
+
+            const usize element_size = element_type->GetSize();
+            const usize element_offset = *index * element_size;
+
+            if (!field_data.empty() && element_offset + element_size > field_data.size())
+            {
+                // INDEX_OUT_OF_BOUNDS
+                return NULL_OPTION;
+            }
+
+            field_data = std::span{ field_data.data() + element_offset, element_size };
+            type = std::make_unique<BlendType>(*element_type);
         }
-        else if (const auto* field_name = std::get_if<std::string_view>(&token); field_name != nullptr && type != nullptr)
+        else if (const auto* field_name = std::get_if<std::string_view>(&token); field_name != nullptr)
         {
-            if (type->IsStruct())
+            if (!type->IsStruct())
             {
-                const auto info = type->GetField(*field_name);
-                if (!info)
-                {
-                    // FIELD_NOT_FOUND
-                    return NULL_OPTION;
-                }
-                struct_data = field_data;
-                field_info = std::make_unique<BlendFieldInfo>(*info);
-                field_data = field_info->GetData(field_data);
-                type = std::make_unique<BlendType>(field_info->GetFieldType());
-            }
-            else
-            {
-                // INDEXED_NON_STRUCT
+                // INDEXED_INVALID_TYPE
                 return NULL_OPTION;
             }
+
+            const auto info = type->GetField(*field_name);
+
+            if (!info)
+            {
+                // FIELD_NOT_FOUND
+                return NULL_OPTION;
+            }
+
+            struct_data = field_data;
+            field_info = std::make_unique<BlendFieldInfo>(*info);
+            field_data = field_info->GetData(field_data);
+            type = std::make_unique<BlendType>(field_info->GetFieldType());
         }
         else
         {
@@ -241,7 +257,6 @@ inline Option<T> BlendType::QueryValue(const Block& block, const Query& query) c
             // INVALID_TYPE
             return NULL_OPTION;
         }
-
         std::array<u8, sizeof(T)> result = {};
         std::copy(field_data.begin(), field_data.end(), result.data());
         return std::bit_cast<T>(result);

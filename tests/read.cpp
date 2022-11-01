@@ -74,14 +74,14 @@ TEST_CASE("default blend file can be read", "[default]")
         }
     }
 
+    const auto mesh_block = blend->GetBlock(BLOCK_CODE_ME);
+    REQUIRE(mesh_block != NULL_OPTION);
+
+    const auto mesh_type = blend->GetBlockType(*mesh_block);
+    REQUIRE(mesh_type != NULL_OPTION);
+
     SECTION("mesh data can be read via reflection")
     {
-        const auto mesh_block = blend->GetBlock(BLOCK_CODE_ME);
-        REQUIRE(mesh_block != NULL_OPTION);
-
-        const auto mesh_type = blend->GetBlockType(*mesh_block);
-        REQUIRE(mesh_type != NULL_OPTION);
-
         const auto fields = mesh_type->GetFields();
         REQUIRE(fields.size() == 54);
 
@@ -142,12 +142,6 @@ TEST_CASE("default blend file can be read", "[default]")
 
     SECTION("mesh data can be read via reflection queries")
     {
-        const auto mesh_block = blend->GetBlock(BLOCK_CODE_ME);
-        REQUIRE(mesh_block != NULL_OPTION);
-
-        const auto mesh_type = blend->GetBlockType(*mesh_block);
-        REQUIRE(mesh_type != NULL_OPTION);
-
         const auto totvert = mesh_type->QueryValue<int, "totvert">(*mesh_block);
         REQUIRE(totvert == 8);
 
@@ -156,6 +150,18 @@ TEST_CASE("default blend file can be read", "[default]")
 
         const auto layer_type = mesh_type->QueryValue<int, "vdata.layers[0].type">(*mesh_block);
         REQUIRE(layer_type == 0);
+
+        static constexpr float EXPECTED_SIZE = 1.f;
+        const auto size_0 = mesh_type->QueryValue<float, "size[0]">(*mesh_block);
+        REQUIRE(size_0 == EXPECTED_SIZE);
+        const auto size_1 = mesh_type->QueryValue<float, "size[1]">(*mesh_block);
+        REQUIRE(size_1 == EXPECTED_SIZE);
+        const auto size_2 = mesh_type->QueryValue<float, "size[2]">(*mesh_block);
+        REQUIRE(size_2 == EXPECTED_SIZE);
+
+        static constexpr std::array<float, 3> EXPECTED_SIZE_ARRAY = { 1.f, 1.f, 1.f };
+        const auto size = mesh_type->QueryValue<std::array<float, 3>, "size">(*mesh_block);
+        REQUIRE(size == EXPECTED_SIZE_ARRAY);
 
         // NOLINTBEGIN
         const auto vertices = mesh_type->QueryValue<const Vertex(*)[8], "vdata.layers[0].data[0]">(*mesh_block);
