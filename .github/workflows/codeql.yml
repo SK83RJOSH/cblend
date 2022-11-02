@@ -40,7 +40,7 @@ jobs:
       matrix:
         language: [ 'cpp' ]
         compiler:
-          - gcc-11
+          - gcc-12
         generator:
           - "Ninja Multi-Config"
         build_type:

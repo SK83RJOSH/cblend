@@ -29,7 +29,7 @@ jobs:
           - windows-latest
         compiler:
           - llvm-15.0.2
-          - gcc-11
+          - gcc-12
         generator:
           - "Ninja Multi-Config"
         build_type:
@@ -42,11 +42,11 @@ jobs:
         exclude:
           # mingw is determined by this author to be too buggy to support
           - os: windows-latest
-            compiler: gcc-11
+            compiler: gcc-12
 
         include:
           # Add appropriate variables for gcov
-          - compiler: gcc-11
+          - compiler: gcc-12
             gcov_executable: gcov
           - compiler: llvm-15.0.2
             gcov_executable: "llvm-cov gcov"
@@ -58,7 +58,7 @@ jobs:
 
           # This exists solely to make sure a non-multiconfig build works
           - os: ubuntu-latest
-            compiler: gcc-11
+            compiler: gcc-12
             generator: "Unix Makefiles"
             build_type: Debug
             gcov_executable: gcov
