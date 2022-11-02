@@ -31,7 +31,7 @@ jobs:
       run: |
         cmake -S . -B ./build -G "Ninja Multi-Config" -DCMAKE_BUILD_TYPE:STRING=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=TRUE
 
-    - uses: ZedThree/clang-tidy-review@v0.9.0
+    - uses: ZedThree/clang-tidy-review@v0.10.1
       id: review
       with:
         build_dir: './build'
