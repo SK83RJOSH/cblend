@@ -4,9 +4,9 @@
 
 using namespace cblend;
 
-// NOLINTBEGIN(readability-function-cognitive-complexity)
+// NOLINTBEGIN
 TEST_CASE("queries can be created", "[default]")
-// NOLINTEND(readability-function-cognitive-complexity)
+// NOLINTEND
 {
     constexpr Option<QueryToken> EXPECTED_NAME_TOKEN("m_test");
     constexpr Option<QueryToken> EXPECTED_INDEX_TOKEN(0U);
@@ -41,9 +41,9 @@ struct Vertex
     u32 pad;
 };
 
-// NOLINTBEGIN(readability-function-cognitive-complexity)
+// NOLINTBEGIN
 TEST_CASE("default blend file can be read", "[default]")
-// NOLINTEND(readability-function-cognitive-complexity)
+// NOLINTEND
 {
     auto blend = Blend::Open("default.blend");
     REQUIRE(blend);
@@ -151,7 +151,7 @@ TEST_CASE("default blend file can be read", "[default]")
         const auto layer_type = mesh_type->QueryValue<int, "vdata.layers[0].type">(*mesh_block);
         REQUIRE(layer_type == 0);
 
-        static constexpr float EXPECTED_SIZE = 1.f;
+        static constexpr float EXPECTED_SIZE = 1.F;
         const auto size_0 = mesh_type->QueryValue<float, "size[0]">(*mesh_block);
         REQUIRE(size_0 == EXPECTED_SIZE);
         const auto size_1 = mesh_type->QueryValue<float, "size[1]">(*mesh_block);
@@ -159,7 +159,7 @@ TEST_CASE("default blend file can be read", "[default]")
         const auto size_2 = mesh_type->QueryValue<float, "size[2]">(*mesh_block);
         REQUIRE(size_2 == EXPECTED_SIZE);
 
-        static constexpr std::array<float, 3> EXPECTED_SIZE_ARRAY = { 1.f, 1.f, 1.f };
+        static constexpr std::array<float, 3> EXPECTED_SIZE_ARRAY = { 1.F, 1.F, 1.F };
         const auto size = mesh_type->QueryValue<std::array<float, 3>, "size">(*mesh_block);
         REQUIRE(size == EXPECTED_SIZE_ARRAY);
 
