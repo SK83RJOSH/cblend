@@ -17,7 +17,7 @@ env:
   CLANG_TIDY_VERSION: "15.0.2"
 
 jobs:
-  Test:
+  Build:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -25,8 +25,8 @@ jobs:
       matrix:
         os:
           - ubuntu-22.04
-          - macos-latest
-          - windows-latest
+          - macos-12
+          - windows-2022
         compiler:
           - llvm-15.0.2
           - gcc-12
@@ -40,8 +40,14 @@ jobs:
           - OFF
 
         exclude:
-          # mingw is determined by this author to be too buggy to support
-          - os: windows-latest
+          # LLVM is covered by Windows
+          - os: ubuntu-22.04
+            compiler: llvm-15.0.2
+          # We don't support MingGW
+          - os: windows-2022
+            compiler: gcc-12
+          # g++ is unfortunately buggy on macOS
+          - os: macos-12
             compiler: gcc-12
 
         include:
@@ -65,25 +71,25 @@ jobs:
             enable_validation: On
 
           # Windows msvc builds
-          - os: windows-latest
+          - os: windows-2022
             compiler: msvc
             generator: "Visual Studio 17 2022"
             build_type: Debug
             enable_validation: On
 
-          - os: windows-latest
+          - os: windows-2022
             compiler: msvc
             generator: "Visual Studio 17 2022"
             build_type: Release
             enable_validation: On
 
-          - os: windows-latest
+          - os: windows-2022
             compiler: msvc
             generator: "Visual Studio 17 2022"
             build_type: Debug
             enable_validation: Off
 
-          - os: windows-latest
+          - os: windows-2022
             compiler: msvc
             generator: "Visual Studio 17 2022"
             build_type: Release
@@ -124,6 +130,7 @@ jobs:
           ccache: true
           clangtidy: ${{ env.CLANG_TIDY_VERSION }}
           cppcheck: true
+          gcc: ${{ contains(matrix.compiler, 'llvm') && '12' || '' }}
           gcovr: true
           opencppcoverage: true
 
