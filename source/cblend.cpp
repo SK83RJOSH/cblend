@@ -114,7 +114,7 @@ BlendType::BlendType(const MemoryTable& memory_table, const Type& type) : m_Memo
     results.reserve(m_Fields.size());
     for (const auto& field : m_Fields)
     {
-        results.emplace_back(BlendFieldInfo(m_MemoryTable, *field, *this));
+        results.emplace_back(m_MemoryTable, *field, *this);
     }
     return results;
 }
@@ -545,7 +545,7 @@ Option<BlendType> cblend::Blend::GetBlockType(const Block& block) const
     if (const auto& type_index = m_TypeDatabase.struct_map.find(block.header.struct_index);
         type_index != m_TypeDatabase.struct_map.end() && type_index->second < m_TypeDatabase.type_list.size() && type_index->second > 0)
     {
-        const Type& result = m_TypeDatabase.type_list[type_index->second];
+        const Type& result(m_TypeDatabase.type_list[type_index->second]);
         return BlendType(m_MemoryTable, result);
     }
     return NULL_OPTION;

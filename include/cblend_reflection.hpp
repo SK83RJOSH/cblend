@@ -51,7 +51,7 @@ public:
     ~TypeContainer() = default;
 
     const Type* const* operator&() const;
-    operator const Type&() const;
+    explicit operator const Type&() const;
 
 private:
     const Type* m_Pointer = nullptr;
@@ -76,6 +76,10 @@ public:
     };
 
     AggregateType(usize size, std::string_view name, std::vector<AggregateType::Field>& fields);
+    AggregateType(const AggregateType&) = delete;
+    AggregateType(AggregateType&& other) noexcept = delete;
+    AggregateType& operator=(const AggregateType&) = delete;
+    AggregateType& operator=(AggregateType&& other) noexcept = delete;
     ~AggregateType() final = default;
 
     [[nodiscard]] std::string_view GetName() const;
@@ -96,6 +100,10 @@ class ArrayType final : public Type
 {
 public:
     ArrayType(usize element_count, const Type* const* element_type);
+    ArrayType(const ArrayType&) = delete;
+    ArrayType(ArrayType&& other) noexcept = delete;
+    ArrayType& operator=(const ArrayType&) = delete;
+    ArrayType& operator=(ArrayType&& other) noexcept = delete;
     ~ArrayType() final = default;
 
     [[nodiscard]] usize GetElementCount() const;
@@ -113,6 +121,10 @@ class FunctionType final : public Type
 {
 public:
     explicit FunctionType(std::string_view name);
+    FunctionType(const FunctionType&) = delete;
+    FunctionType(FunctionType&& other) noexcept = delete;
+    FunctionType& operator=(const FunctionType&) = delete;
+    FunctionType& operator=(FunctionType&& other) noexcept = delete;
     ~FunctionType() final = default;
 
     [[nodiscard]] std::string_view GetName() const;
@@ -128,6 +140,10 @@ class FundamentalType final : public Type
 {
 public:
     FundamentalType(std::string_view name, usize size);
+    FundamentalType(const FundamentalType&) = delete;
+    FundamentalType(FundamentalType&& other) noexcept = delete;
+    FundamentalType& operator=(const FundamentalType&) = delete;
+    FundamentalType& operator=(FundamentalType&& other) noexcept = delete;
     ~FundamentalType() final = default;
 
     [[nodiscard]] std::string_view GetName() const;
@@ -144,6 +160,10 @@ class PointerType final : public Type
 {
 public:
     PointerType(const Type* const* pointee_type, usize size);
+    PointerType(const PointerType&) = delete;
+    PointerType(PointerType&& other) noexcept = delete;
+    PointerType& operator=(const PointerType&) = delete;
+    PointerType& operator=(PointerType&& other) noexcept = delete;
     ~PointerType() final = default;
 
     [[nodiscard]] const Type& GetPointeeType() const;

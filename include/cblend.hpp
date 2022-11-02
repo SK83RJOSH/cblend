@@ -34,7 +34,7 @@ public:
     MemoryTable() = default;
     explicit MemoryTable(std::vector<MemoryRange>& ranges);
 
-    std::span<const u8> GetMemory(u64 address, usize size) const;
+    [[nodiscard]] std::span<const u8> GetMemory(u64 address, usize size) const;
     template<class T>
     Option<T> GetMemory(u64 address) const;
 
@@ -67,8 +67,6 @@ class BlendType
 {
 public:
     BlendType(const MemoryTable& memory_table, const Type& type);
-
-    inline bool operator==(const BlendType& rhs) const = default;
 
     [[nodiscard]] bool IsArray() const;
     [[nodiscard]] bool IsPointer() const;
@@ -103,8 +101,6 @@ class BlendFieldInfo
 {
 public:
     BlendFieldInfo(const MemoryTable& memory_table, const AggregateType::Field& field, const BlendType& declaring_type);
-
-    inline bool operator==(const BlendFieldInfo& rhs) const = default;
 
     [[nodiscard]] std::string_view GetName() const;
     [[nodiscard]] const BlendType& GetDeclaringType() const;
@@ -177,16 +173,17 @@ inline Option<T> MemoryTable::GetMemory(u64 address) const
 }
 
 template<class T>
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 inline Result<T, QueryValueError> BlendType::QueryValue(const Block& block, const Query& query) const
 {
-    std::span<const u8> struct_data = block.body;
-    std::unique_ptr<BlendFieldInfo> field_info = nullptr;
-    std::span<const u8> field_data = block.body;
+    std::span<const u8> data = block.body;
+    std::span<const u8> struct_data = data;
+    std::unique_ptr<BlendFieldInfo> info = nullptr;
     std::unique_ptr<BlendType> type = std::make_unique<BlendType>(*this);
 
     for (const auto& token : query)
     {
-        if (const auto* index = std::get_if<usize>(&token); index != nullptr && field_info != nullptr)
+        if (const auto* index = std::get_if<usize>(&token); index != nullptr && info != nullptr)
         {
             const auto element_type = type->GetElementType();
 
@@ -197,14 +194,14 @@ inline Result<T, QueryValueError> BlendType::QueryValue(const Block& block, cons
 
             if (type->IsArray())
             {
-                field_data = field_info->GetData(struct_data);
+                data = info->GetData(struct_data);
             }
             else
             {
-                field_data = field_info->GetPointerData(struct_data);
+                data = info->GetPointerData(struct_data);
             }
 
-            if (field_data.data() == nullptr)
+            if (data.data() == nullptr)
             {
                 return MakeError(QueryValueError::InvalidValue);
             }
@@ -212,12 +209,12 @@ inline Result<T, QueryValueError> BlendType::QueryValue(const Block& block, cons
             const usize element_size = element_type->GetSize();
             const usize element_offset = *index * element_size;
 
-            if (!field_data.empty() && element_offset + element_size > field_data.size())
+            if (!data.empty() && element_offset + element_size > data.size())
             {
                 return MakeError(QueryValueError::IndexOutOfBounds);
             }
 
-            field_data = std::span{ field_data.data() + element_offset, element_size };
+            data = std::span{ data.data() + element_offset, element_size };
             type = std::make_unique<BlendType>(*element_type);
         }
         else if (const auto* field_name = std::get_if<std::string_view>(&token); field_name != nullptr)
@@ -227,17 +224,17 @@ inline Result<T, QueryValueError> BlendType::QueryValue(const Block& block, cons
                 return MakeError(QueryValueError::IndexedInvalidType);
             }
 
-            const auto info = type->GetField(*field_name);
+            const auto field_info = type->GetField(*field_name);
 
-            if (!info)
+            if (!field_info)
             {
                 return MakeError(QueryValueError::FieldNotFound);
             }
 
-            struct_data = field_data;
-            field_info = std::make_unique<BlendFieldInfo>(*info);
-            field_data = field_info->GetData(field_data);
-            type = std::make_unique<BlendType>(field_info->GetFieldType());
+            struct_data = data;
+            info = std::make_unique<BlendFieldInfo>(*field_info);
+            data = info->GetData(data);
+            type = std::make_unique<BlendType>(info->GetFieldType());
         }
         else
         {
@@ -247,20 +244,21 @@ inline Result<T, QueryValueError> BlendType::QueryValue(const Block& block, cons
 
     if constexpr (std::is_pointer_v<T>)
     {
-        if (field_data.data() == nullptr || (field_data.size() != 0 && field_data.size() != sizeof(std::remove_pointer_t<T>)))
+        if (data.data() == nullptr || (!data.empty() && data.size() != sizeof(std::remove_pointer_t<T>)))
         {
             return MakeError(QueryValueError::InvalidType);
         }
-        return reinterpret_cast<T>(field_data.data());
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+        return reinterpret_cast<T>(data.data());
     }
     else
     {
-        if (field_data.size() != sizeof(T))
+        if (data.size() != sizeof(T))
         {
             return MakeError(QueryValueError::InvalidType);
         }
         std::array<u8, sizeof(T)> result = {};
-        std::copy(field_data.begin(), field_data.end(), result.data());
+        std::copy(data.begin(), data.end(), result.data());
         return std::bit_cast<T>(result);
     }
 }
@@ -303,7 +301,7 @@ inline Option<T> BlendFieldInfo::GetValue(const Block& block) const
 template<class T>
 inline Option<T*> BlendFieldInfo::GetPointer(std::span<const u8> span) const
 {
-    std::span<const u8> data = GetPointerData(span);
+    const std::span<const u8> data = GetPointerData(span);
 
     if (data.size() == sizeof(T))
     {

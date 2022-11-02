@@ -282,15 +282,15 @@ public:
         return Create(std::span{ tokens.data(), tokens.size() });
     }
 
-    usize GetTokenCount() const;
-    Option<QueryToken> GetToken(usize token_index) const;
+    [[nodiscard]] usize GetTokenCount() const;
+    [[nodiscard]] Option<QueryToken> GetToken(usize token_index) const;
 
     constexpr auto begin() noexcept { return m_Tokens.begin(); }
     constexpr auto end() noexcept { return m_Tokens.end(); }
-    constexpr auto begin() const noexcept { return m_Tokens.begin(); }
-    constexpr auto end() const noexcept { return m_Tokens.end(); }
-    constexpr auto cbegin() const noexcept { return m_Tokens.cbegin(); }
-    constexpr auto cend() const noexcept { return m_Tokens.cend(); }
+    [[nodiscard]] constexpr auto begin() const noexcept { return m_Tokens.begin(); }
+    [[nodiscard]] constexpr auto end() const noexcept { return m_Tokens.end(); }
+    [[nodiscard]] constexpr auto cbegin() const noexcept { return m_Tokens.cbegin(); }
+    [[nodiscard]] constexpr auto cend() const noexcept { return m_Tokens.cend(); }
 
 private:
     QueryTokens m_Tokens;
