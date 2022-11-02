@@ -51,6 +51,16 @@ enum class ReflectionError : u8
 
 using BlendError = std::variant<FileStreamError, FormatError, ReflectionError>;
 
+enum class QueryValueError : u8
+{
+    InvalidQuery,
+    InvalidType,
+    InvalidValue,
+    FieldNotFound,
+    IndexOutOfBounds,
+    IndexedInvalidType,
+};
+
 class BlendFieldInfo;
 
 class BlendType
@@ -76,9 +86,9 @@ public:
     [[nodiscard]] std::vector<BlendFieldInfo> GetFields() const;
 
     template<class T>
-    [[nodiscard]] Option<T> QueryValue(const Block& block, const Query& query) const;
+    [[nodiscard]] Result<T, QueryValueError> QueryValue(const Block& block, const Query& query) const;
     template<class T, QueryString Input>
-    [[nodiscard]] Option<T> QueryValue(const Block& block) const;
+    [[nodiscard]] Result<T, QueryValueError> QueryValue(const Block& block) const;
 
 private:
     const MemoryTable& m_MemoryTable;
@@ -167,7 +177,7 @@ inline Option<T> MemoryTable::GetMemory(u64 address) const
 }
 
 template<class T>
-inline Option<T> BlendType::QueryValue(const Block& block, const Query& query) const
+inline Result<T, QueryValueError> BlendType::QueryValue(const Block& block, const Query& query) const
 {
     std::span<const u8> struct_data = block.body;
     std::unique_ptr<BlendFieldInfo> field_info = nullptr;
@@ -182,23 +192,21 @@ inline Option<T> BlendType::QueryValue(const Block& block, const Query& query) c
 
             if (!element_type)
             {
-                // INDEXED_INVALID_TYPE
-                return NULL_OPTION;
+                return MakeError(QueryValueError::IndexedInvalidType);
             }
 
-            if (type->IsPointer())
+            if (type->IsArray())
             {
-                field_data = field_info->GetPointerData(struct_data);
+                field_data = field_info->GetData(struct_data);
             }
             else
             {
-                field_data = field_info->GetData(struct_data);
+                field_data = field_info->GetPointerData(struct_data);
             }
 
             if (field_data.data() == nullptr)
             {
-                // INVALID_ARRAY_OR_POINTER
-                return NULL_OPTION;
+                return MakeError(QueryValueError::InvalidValue);
             }
 
             const usize element_size = element_type->GetSize();
@@ -206,8 +214,7 @@ inline Option<T> BlendType::QueryValue(const Block& block, const Query& query) c
 
             if (!field_data.empty() && element_offset + element_size > field_data.size())
             {
-                // INDEX_OUT_OF_BOUNDS
-                return NULL_OPTION;
+                return MakeError(QueryValueError::IndexOutOfBounds);
             }
 
             field_data = std::span{ field_data.data() + element_offset, element_size };
@@ -217,16 +224,14 @@ inline Option<T> BlendType::QueryValue(const Block& block, const Query& query) c
         {
             if (!type->IsStruct())
             {
-                // INDEXED_INVALID_TYPE
-                return NULL_OPTION;
+                return MakeError(QueryValueError::IndexedInvalidType);
             }
 
             const auto info = type->GetField(*field_name);
 
             if (!info)
             {
-                // FIELD_NOT_FOUND
-                return NULL_OPTION;
+                return MakeError(QueryValueError::FieldNotFound);
             }
 
             struct_data = field_data;
@@ -236,8 +241,7 @@ inline Option<T> BlendType::QueryValue(const Block& block, const Query& query) c
         }
         else
         {
-            // QUERY_INVALID
-            return NULL_OPTION;
+            return MakeError(QueryValueError::InvalidQuery);
         }
     }
 
@@ -245,8 +249,7 @@ inline Option<T> BlendType::QueryValue(const Block& block, const Query& query) c
     {
         if (field_data.data() == nullptr || (field_data.size() != 0 && field_data.size() != sizeof(std::remove_pointer_t<T>)))
         {
-            // INVALID_TYPE
-            return NULL_OPTION;
+            return MakeError(QueryValueError::InvalidType);
         }
         return reinterpret_cast<T>(field_data.data());
     }
@@ -254,8 +257,7 @@ inline Option<T> BlendType::QueryValue(const Block& block, const Query& query) c
     {
         if (field_data.size() != sizeof(T))
         {
-            // INVALID_TYPE
-            return NULL_OPTION;
+            return MakeError(QueryValueError::InvalidType);
         }
         std::array<u8, sizeof(T)> result = {};
         std::copy(field_data.begin(), field_data.end(), result.data());
@@ -264,12 +266,12 @@ inline Option<T> BlendType::QueryValue(const Block& block, const Query& query) c
 }
 
 template<class T, QueryString Input>
-inline Option<T> BlendType::QueryValue(const Block& block) const
+inline Result<T, QueryValueError> BlendType::QueryValue(const Block& block) const
 {
     const auto query = Query::Create<Input>();
     if (!query)
     {
-        return NULL_OPTION;
+        return MakeError(QueryValueError::InvalidQuery);
     }
     return QueryValue<T>(block, *query);
 }

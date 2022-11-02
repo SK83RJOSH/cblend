@@ -165,7 +165,7 @@ TEST_CASE("default blend file can be read", "[default]")
 
         // NOLINTBEGIN
         const auto vertices = mesh_type->QueryValue<const Vertex(*)[8], "vdata.layers[0].data[0]">(*mesh_block);
-        REQUIRE((vertices != NULL_OPTION && *vertices != nullptr));
+        REQUIRE((vertices.has_value() && *vertices != nullptr));
         REQUIRE(((**vertices)[0].x == Catch::Approx(1) && (**vertices)[0].y == Catch::Approx(1) && (**vertices)[0].z == Catch::Approx(1)));
         REQUIRE(((**vertices)[1].x == Catch::Approx(1) && (**vertices)[1].y == Catch::Approx(1) && (**vertices)[1].z == Catch::Approx(-1)));
         REQUIRE(((**vertices)[2].x == Catch::Approx(1) && (**vertices)[2].y == Catch::Approx(-1) && (**vertices)[2].z == Catch::Approx(1)));
