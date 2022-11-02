@@ -4,6 +4,7 @@
 
 #include <array>
 #include <bit>
+#include <compare>
 #include <string_view>
 #include <vector>
 
