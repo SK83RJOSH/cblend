@@ -18,8 +18,6 @@ jobs:
         compiler: gcc
         cmake: true
         ninja: true
-        conan: false
-        vcpkg: false
         ccache: true
 
     - name: Cleanup Conan system packages (they are not properly cached)

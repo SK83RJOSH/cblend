@@ -70,7 +70,7 @@ struct TokenizeDelimiter
     {
         string[0] = token;
         string[1] = '\0';
-    };
+    }
     // NOLINTEND(*-avoid-c-arrays, *-explicit-conversions)
 };
 
@@ -87,7 +87,7 @@ enum class TokenizeBehavior : u8
 
 constexpr TokenizeBehavior operator|(TokenizeBehavior rhs, TokenizeBehavior lhs)
 {
-    return (TokenizeBehavior)(u8(lhs) | u8(rhs));
+    return TokenizeBehavior(u8(lhs) | u8(rhs));
 }
 
 constexpr bool operator&(TokenizeBehavior rhs, TokenizeBehavior lhs)
@@ -218,6 +218,7 @@ struct QueryString
     // NOLINTBEGIN(*-avoid-c-arrays, *-explicit-conversions)
     char string[N]{};
     usize size{ N };
+
     constexpr QueryString(const char (&input)[N]) { std::copy(std::begin(input), std::end(input), std::begin(string)); }
     // NOLINTEND(*-avoid-c-arrays, *-explicit-conversions)
 };
@@ -243,7 +244,7 @@ consteval auto ToTypes()
     // Not random access iterators, so we need to get size like this
     constexpr auto NUM_TOKENS = []()
     {
-        auto tokenizer{ Tokenizer(std::string_view{ Input.string, Input.size }) };
+        auto tokenizer = Tokenizer(std::string_view{ Input.string, Input.size });
         usize count{};
         for ([[maybe_unused]] auto token : tokenizer)
         {
@@ -253,12 +254,10 @@ consteval auto ToTypes()
     }();
 
     std::array<T, NUM_TOKENS> out_array{};
-
-    auto tokenizer{ Tokenizer(std::string_view{ Input.string, Input.size }) };
-    usize index{};
-    while (index != NUM_TOKENS)
+    auto tokenizer = Tokenizer(std::string_view{ Input.string, Input.size });
+    for (usize index = 0; index < NUM_TOKENS; ++index)
     {
-        out_array[index++] = ToType<T>(*tokenizer);
+        out_array[index] = ToType<T>(*tokenizer);
         ++tokenizer;
     }
     return out_array;

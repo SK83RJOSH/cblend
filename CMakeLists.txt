@@ -86,15 +86,12 @@ endif()
 # Configure tests
 option(CBLEND_BUILD_TESTS "Build tests" ${PROJECT_IS_TOP_LEVEL})
 
-# Configure validation
-option(CBLEND_ENABLE_VALIDATION "Enable validation (static analysis, coverage, and sanitizers)" OFF)
-
 # Configure static analysis
 set(ENABLE_CLANG_TIDY OFF)
 set(ENABLE_CPPCHECK OFF)
 set(ENABLE_VS_ANALYSIS OFF)
 
-option(CBLEND_ENABLE_STATIC_ANALYSIS "Enable static analysis" ${CBLEND_ENABLE_VALIDATION})
+option(CBLEND_ENABLE_STATIC_ANALYSIS "Enable static analysis" OFF)
 
 if(CBLEND_ENABLE_STATIC_ANALYSIS)
     set(ENABLE_CLANG_TIDY "ENABLE_CLANG_TIDY")
@@ -105,7 +102,7 @@ endif()
 # Configure coverage
 set(ENABLE_COVERAGE OFF)
 
-option(CBLEND_ENABLE_COVERAGE "Enable coverage" ${CBLEND_ENABLE_VALIDATION})
+option(CBLEND_ENABLE_COVERAGE "Enable coverage" OFF)
 
 if(CBLEND_ENABLE_COVERAGE)
     set(ENABLE_COVERAGE "ENABLE_COVERAGE")
@@ -126,7 +123,7 @@ set(ENABLE_SANITIZER_ADDRESS OFF)
 set(ENABLE_SANITIZER_LEAK OFF)
 set(ENABLE_SANITIZER_UNDEFINED_BEHAVIOR OFF)
 
-option(CBLEND_ENABLE_SANITIZE "Enable sanitizers" ${CBLEND_ENABLE_VALIDATION})
+option(CBLEND_ENABLE_SANITIZE "Enable sanitizers" OFF)
 
 if(CBLEND_ENABLE_SANITIZE)
     set(ENABLE_SANITIZER_ADDRESS "ENABLE_SANITIZER_ADDRESS")
@@ -265,7 +262,7 @@ if(CBLEND_BUILD_TESTS)
     file(GLOB_RECURSE CBLEND_TEST_SOURCES CONFIGURE_DEPENDS ${CBLEND_TESTS_DIR}/*.cpp)
     add_executable(cblend-tests ${CBLEND_TEST_SOURCES})
     target_link_libraries(cblend-tests PRIVATE project_options project_warnings)
-    target_link_system_libraries(cblend-tests PRIVATE Catch2 Catch2WithMain cblend)
+    target_link_libraries(cblend-tests PRIVATE Catch2 Catch2WithMain cblend)
     add_test(
         NAME cblend::tests
         COMMAND cblend-tests

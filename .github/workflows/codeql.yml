@@ -1,30 +1,13 @@
-# For most projects, this workflow file will not need changing; you simply need
-# to commit it to your repository.
-#
-# You may wish to alter this file to override the set of languages analyzed,
-# or to provide custom queries or build logic.
-#
-# ******** NOTE ********
-# We have attempted to detect the languages in your repository. Please check
-# the `language` matrix defined below to confirm you have the correct set of
-# supported CodeQL languages.
-#
 name: "codeql"
 
 on:
-  push:
-    branches: [ main, develop ]
   pull_request:
-    # The branches below must be a subset of the branches above
-    branches: [ main, develop ]
+  push:
+    branches:
+      - main
+      - develop
   schedule:
     - cron: '38 0 * * 5'
-
-env:
-  # Conan cache environment variables
-  CONAN_SYSREQUIRES_MODE: enabled
-  CONAN_USER_HOME: "${{ github.workspace }}/conan-cache"
-  CONAN_USER_HOME_SHORT: "${{ github.workspace }}/conan-cache/short"
 
 jobs:
   analyze:
@@ -38,15 +21,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: [ 'cpp' ]
+        languages: [ 'cpp' ]
         compiler:
           - gcc-12
-        generator:
-          - "Ninja Multi-Config"
-        build_type:
+        CMAKE_BUILD_TYPE:
           - Debug
-        enable_validation:
-          - OFF
+        CMAKE_GENERATOR:
+          - "Ninja Multi-Config"
 
     steps:
     - uses: actions/checkout@v3
@@ -57,9 +38,8 @@ jobs:
       uses: ./.github/actions/setup_cache
       with:
         compiler: ${{ matrix.compiler }}
-        build_type: ${{ matrix.build_type }}
-        enable_validation: ${{ matrix.enable_validation }}
-        generator: ${{ matrix.generator }}
+        CMAKE_BUILD_TYPE: ${{ matrix.CMAKE_BUILD_TYPE }}
+        CMAKE_GENERATOR: ${{ matrix.CMAKE_GENERATOR }}
 
     - name: Setup Cpp
       id: setup_cpp
@@ -67,41 +47,21 @@ jobs:
       with:
         compiler: ${{ matrix.compiler }}
         vcvarsall: ${{ contains(matrix.os, 'windows' )}}
+        ccache: true
         cmake: true
         ninja: true
-        conan: false
-        vcpkg: false
-        ccache: true
-        clangtidy: false
-        cppcheck: false
-        gcovr: false
-        opencppcoverage: false
+        task: true
 
-    - name: Cleanup Conan system packages (they are not properly cached)
-      if: steps.setup_cpp.with.conan == true
-      run: |
-        conan remove -f '*/system'
-
-      # make sure coverage is only enabled for Debug builds, since it sets -O0 to make sure coverage
-      # has meaningful results
-    - name: Configure CMake
-      run: |
-        cmake -S . -B ./build -G "${{matrix.generator}}" -DCMAKE_BUILD_TYPE:STRING=${{matrix.build_type}} -DCBLEND_ENABLE_VALIDATION:BOOL=${{matrix.enable_validation}} -DCBLEND_ENABLE_COVERAGE:BOOL=${{ matrix.build_type == 'Debug' }}
-
-    # Initializes the CodeQL tools for scanning.
     - name: Initialize CodeQL
       uses: github/codeql-action/init@v2
       with:
-        languages: ${{ matrix.language }}
-        # If you wish to specify custom queries, you can do so here or in a config file.
-        # By default, queries listed here will override any specified in a config file.
-        # Prefix the list here with "+" to use these queries and those in the config file.
-        # queries: ./path/to/local/query, your-org/your-repo/queries@main
+        languages: ${{ matrix.languages }}
 
     - name: Build
-      # Execute the build.  You can specify a specific target with "--target <NAME>"
-      run: |
-        cmake --build ./build --config ${{matrix.build_type}}
+      run: task build
+      env:
+        CMAKE_BUILD_TYPE: ${{ matrix.CMAKE_BUILD_TYPE }}
+        CMAKE_GENERATOR: ${{ matrix.CMAKE_GENERATOR }}
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v2
