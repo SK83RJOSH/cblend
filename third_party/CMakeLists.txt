@@ -16,3 +16,10 @@ set(OPTIONAL_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(OPTIONAL_BUILD_PACKAGE OFF CACHE BOOL "" FORCE)
 add_subdirectory(optional)
 target_disable_static_analysis(optional)
+
+# optional
+add_subdirectory(range-v3)
+target_disable_static_analysis(range-v3-meta)
+target_disable_static_analysis(range-v3-concepts)
+target_disable_static_analysis(range-v3)
+

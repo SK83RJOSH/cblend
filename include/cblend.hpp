@@ -4,6 +4,7 @@
 #include <cblend_query.hpp>
 #include <cblend_reflection.hpp>
 #include <cblend_stream.hpp>
+#include <range/v3/view/filter.hpp>
 
 #include <deque>
 #include <unordered_map>
@@ -345,6 +346,6 @@ static constexpr auto BlockFilter(const BlockCode& code)
 
 inline auto Blend::GetBlocks(const BlockCode& code) const
 {
-    return m_File.blocks | std::views::filter(BlockFilter(code));
+    return m_File.blocks | ranges::views::filter(BlockFilter(code));
 }
 } // namespace cblend

@@ -1,5 +1,6 @@
 #include <cblend_format.hpp>
 #include <cblend_stream.hpp>
+#include <range/v3/algorithm/find_if.hpp>
 
 using namespace cblend;
 
@@ -278,7 +279,7 @@ template<PtrType Ptr>
 
 Result<Sdna, FormatError> cblend::ReadSdna(const File& file)
 {
-    const auto block = std::ranges::find_if(file.blocks, [](const auto& block) { return block.header.code == BLOCK_CODE_DNA1; });
+    const auto block = ranges::find_if(file.blocks, [](const auto& block) { return block.header.code == BLOCK_CODE_DNA1; });
 
     if (block == file.blocks.end())
     {

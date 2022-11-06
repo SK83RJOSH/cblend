@@ -216,7 +216,7 @@ set(CBLEND_INCLUDE_DIR ${CBLEND_DIR}/include)
 set(CBLEND_SOURCE_DIR ${CBLEND_DIR}/source)
 set(CBLEND_NATVIS_DIR ${CBLEND_DIR}/natvis)
 set(CBLEND_EXTERNAL_DIR ${CBLEND_DIR}/external)
-set(CBLEND_DEPENDENCIES expected optional)
+set(CBLEND_DEPENDENCIES expected optional range-v3 range-v3-meta range-v3-concepts)
 set(CBLEND_EXPORT ${CMAKE_BINARY_DIR}/exports/cblend_export.hpp)
 
 file(GLOB_RECURSE CBLEND_HEADERS CONFIGURE_DEPENDS ${CBLEND_INCLUDE_DIR}/*.hpp)

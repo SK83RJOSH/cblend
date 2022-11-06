@@ -1,8 +1,8 @@
 #include <cblend_query.hpp>
+#include <range/v3/algorithm/all_of.hpp>
 
 #include <cctype>
 #include <limits>
-#include <ranges>
 
 using namespace cblend;
 
@@ -20,7 +20,7 @@ using namespace cblend;
         return std::isalpha(chr) != 0 || std::isdigit(chr) != 0 || chr == '_';
     };
 
-    if (!std::ranges::all_of(input, valid_character))
+    if (!ranges::all_of(input, valid_character))
     {
         return NULL_OPTION;
     }

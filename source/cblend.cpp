@@ -1,4 +1,8 @@
 #include <cblend.hpp>
+#include <range/v3/algorithm/all_of.hpp>
+#include <range/v3/algorithm/count_if.hpp>
+#include <range/v3/algorithm/find_if.hpp>
+#include <range/v3/algorithm/sort.hpp>
 
 #include <cctype>
 #include <charconv>
@@ -17,7 +21,7 @@ std::span<const u8> MemoryTable::GetMemory(u64 address, usize size) const
     };
 
     // TODO: Figure out how to use partition_point here...
-    if (auto result = std::ranges::find_if(m_Ranges, range_contains); result != m_Ranges.end())
+    if (auto result = ranges::find_if(m_Ranges, range_contains); result != m_Ranges.end())
     {
         return std::span{ result->span.data() + (head - result->head), size };
     }
@@ -206,7 +210,7 @@ bool IsValidName(std::string_view name)
     }
 
     // All characters must be A-Z, 0-9, or _
-    return std::ranges::all_of(name, [](const char chr) { return std::isalpha(chr) != 0 || std::isdigit(chr) != 0 || chr == '_'; });
+    return ranges::all_of(name, [](const char chr) { return std::isalpha(chr) != 0 || std::isdigit(chr) != 0 || chr == '_'; });
 }
 
 Result<Option<AggregateType::Field>, ReflectionError>
@@ -450,7 +454,7 @@ MemoryTable CreateMemoryTable(const File& file)
         ranges.emplace_back(MemoryRange{ header.address, header.address + header.length, std::span{ body } });
     }
 
-    std::ranges::sort(ranges, [](const MemoryRange& first, const MemoryRange& second) { return first.head < second.head; });
+    ranges::sort(ranges, [](const MemoryRange& first, const MemoryRange& second) { return first.head < second.head; });
 
     return MemoryTable(ranges);
 }
@@ -528,7 +532,7 @@ Result<const Blend, BlendError> Blend::Open(std::string_view path)
 
 [[nodiscard]] usize Blend::GetBlockCount(const BlockCode& code) const
 {
-    return std::ranges::count_if(m_File.blocks, BlockFilter(code));
+    return ranges::count_if(m_File.blocks, BlockFilter(code));
 }
 
 [[nodiscard]] Option<const Block&> Blend::GetBlock(const BlockCode& code) const
