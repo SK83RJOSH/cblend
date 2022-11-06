@@ -141,7 +141,7 @@ jobs:
 
       - name: Configure CMake
         run: |
-          cmake -S . -B ./build -G "${{matrix.generator}}" CPACK_PACKAGING_INSTALL_PREFIX=./install -DCMAKE_INSTALL_PREFIX:STRING=./install -DCMAKE_BUILD_TYPE:STRING=${{matrix.build_type}} -DOPT_ENABLE_VALIDATION:BOOL=${{matrix.enable_validation}} -DOPT_ENABLE_COVERAGE:BOOL=${{ matrix.build_type == 'Debug' }}
+          cmake -S . -B ./build -G "${{matrix.generator}}" CPACK_PACKAGING_INSTALL_PREFIX=./install -DCMAKE_INSTALL_PREFIX:STRING=./install -DCMAKE_BUILD_TYPE:STRING=${{matrix.build_type}} -DCBLEND_ENABLE_VALIDATION:BOOL=${{matrix.enable_validation}} -DCBLEND_ENABLE_COVERAGE:BOOL=${{ matrix.build_type == 'Debug' }}
 
       - name: Build
         # Clear out LLVM environment to avoid issues with GCC.
