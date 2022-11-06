@@ -1,11 +1,11 @@
 #pragma once
 
 #include <cblend_types.hpp>
+#include <range/v3/algorithm/reverse.hpp>
 
 #include <algorithm>
 #include <bit>
 #include <fstream>
-#include <ranges>
 #include <span>
 #include <string>
 #include <string_view>
@@ -126,7 +126,7 @@ constexpr static T ByteSwap(T& value) noexcept
 {
     static_assert(std::has_unique_object_representations_v<T>, "T may not have padding");
     auto swapped = std::bit_cast<std::array<std::byte, sizeof(T)>>(value);
-    std::ranges::reverse(swapped);
+    ranges::reverse(swapped);
     return std::bit_cast<T>(swapped);
 }
 

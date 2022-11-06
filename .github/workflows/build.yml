@@ -17,19 +17,19 @@ env:
   CLANG_TIDY_VERSION: "15.0.2"
 
 jobs:
-  Test:
+  Build:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
 
       matrix:
         os:
-          - ubuntu-latest
-          - macos-latest
-          - windows-latest
+          - ubuntu-22.04
+          - macos-12
+          - windows-2022
         compiler:
           - llvm-15.0.2
-          - gcc-11
+          - gcc-12
         generator:
           - "Ninja Multi-Config"
         build_type:
@@ -40,13 +40,19 @@ jobs:
           - OFF
 
         exclude:
-          # mingw is determined by this author to be too buggy to support
-          - os: windows-latest
-            compiler: gcc-11
+          # LLVM is covered by Windows
+          - os: ubuntu-22.04
+            compiler: llvm-15.0.2
+          # We don't support MingGW
+          - os: windows-2022
+            compiler: gcc-12
+          # g++ is unfortunately buggy on macOS
+          - os: macos-12
+            compiler: gcc-12
 
         include:
           # Add appropriate variables for gcov
-          - compiler: gcc-11
+          - compiler: gcc-12
             gcov_executable: gcov
           - compiler: llvm-15.0.2
             gcov_executable: "llvm-cov gcov"
@@ -57,33 +63,33 @@ jobs:
             package_generator: TBZ2
 
           # This exists solely to make sure a non-multiconfig build works
-          - os: ubuntu-latest
-            compiler: gcc-11
+          - os: ubuntu-22.04
+            compiler: gcc-12
             generator: "Unix Makefiles"
             build_type: Debug
             gcov_executable: gcov
             enable_validation: On
 
           # Windows msvc builds
-          - os: windows-latest
+          - os: windows-2022
             compiler: msvc
             generator: "Visual Studio 17 2022"
             build_type: Debug
             enable_validation: On
 
-          - os: windows-latest
+          - os: windows-2022
             compiler: msvc
             generator: "Visual Studio 17 2022"
             build_type: Release
             enable_validation: On
 
-          - os: windows-latest
+          - os: windows-2022
             compiler: msvc
             generator: "Visual Studio 17 2022"
             build_type: Debug
             enable_validation: Off
 
-          - os: windows-latest
+          - os: windows-2022
             compiler: msvc
             generator: "Visual Studio 17 2022"
             build_type: Release
@@ -124,6 +130,7 @@ jobs:
           ccache: true
           clangtidy: ${{ env.CLANG_TIDY_VERSION }}
           cppcheck: true
+          gcc: ${{ contains(matrix.compiler, 'llvm') && '12' || '' }}
           gcovr: true
           opencppcoverage: true
 

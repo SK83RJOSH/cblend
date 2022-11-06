@@ -4,6 +4,7 @@
 
 #include <array>
 #include <bit>
+#include <compare>
 #include <string_view>
 #include <vector>
 
@@ -52,11 +53,13 @@ public:
         // Apparently blender isn't writing block codes as a char sequence...
         if constexpr (std::endian::native == std::endian::big)
         {
+            // NOLINTBEGIN(hicpp-signed-bitwise, *-magic-numbers)
             u32 swapped = (m_Value >> 24) & 0xFF;
             swapped |= ((m_Value >> 16) & 0xFF) << 8;
             swapped |= ((m_Value >> 8) & 0xFF) << 16;
             swapped |= (m_Value & 0xFF) << 24;
             m_Value = swapped;
+            // NOLINTEND(hicpp-signed-bitwise, *-magic-numbers)
         }
     }
 

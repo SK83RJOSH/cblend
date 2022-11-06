@@ -4,7 +4,7 @@ on: [pull_request]
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
     - uses: actions/checkout@v3
@@ -31,7 +31,7 @@ jobs:
       run: |
         cmake -S . -B ./build -G "Ninja Multi-Config" -DCMAKE_BUILD_TYPE:STRING=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=TRUE
 
-    - uses: ZedThree/clang-tidy-review@v0.9.0
+    - uses: SK83RJOSH/clang-tidy-review@v0.0.1
       id: review
       with:
         build_dir: './build'

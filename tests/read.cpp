@@ -4,6 +4,35 @@
 
 using namespace cblend;
 
+// NOLINTBEGIN
+TEST_CASE("queries can be created", "[default]")
+// NOLINTEND
+{
+    constexpr Option<QueryToken> EXPECTED_NAME_TOKEN("m_test");
+    constexpr Option<QueryToken> EXPECTED_INDEX_TOKEN(0U);
+
+    const auto invalid_query = Query::Create<"">();
+    REQUIRE(!invalid_query);
+
+    const auto name_query = Query::Create<"m_test">();
+    REQUIRE(name_query);
+    REQUIRE(name_query->GetTokenCount() == 1U);
+    REQUIRE(name_query->GetToken(0) == EXPECTED_NAME_TOKEN);
+    REQUIRE(name_query->GetToken(1) == NULL_OPTION);
+
+    const auto index_query = Query::Create<"[0]">();
+    REQUIRE(index_query);
+    REQUIRE(index_query->GetTokenCount() == 1U);
+    REQUIRE(index_query->GetToken(0) == EXPECTED_INDEX_TOKEN);
+
+    const auto composite_query = Query::Create<"m_test.m_test[0]">();
+    REQUIRE(composite_query);
+    REQUIRE(composite_query->GetTokenCount() == 3U);
+    REQUIRE(composite_query->GetToken(0) == EXPECTED_NAME_TOKEN);
+    REQUIRE(composite_query->GetToken(1) == EXPECTED_NAME_TOKEN);
+    REQUIRE(composite_query->GetToken(2) == EXPECTED_INDEX_TOKEN);
+}
+
 struct Vertex
 {
     float x;
@@ -12,9 +41,9 @@ struct Vertex
     u32 pad;
 };
 
-// NOLINTBEGIN(readability-function-cognitive-complexity)
+// NOLINTBEGIN
 TEST_CASE("default blend file can be read", "[default]")
-// NOLINTEND(readability-function-cognitive-complexity)
+// NOLINTEND
 {
     auto blend = Blend::Open("default.blend");
     REQUIRE(blend);
@@ -45,14 +74,14 @@ TEST_CASE("default blend file can be read", "[default]")
         }
     }
 
-    SECTION("mesh data can be read successfully")
+    const auto mesh_block = blend->GetBlock(BLOCK_CODE_ME);
+    REQUIRE(mesh_block != NULL_OPTION);
+
+    const auto mesh_type = blend->GetBlockType(*mesh_block);
+    REQUIRE(mesh_type != NULL_OPTION);
+
+    SECTION("mesh data can be read via reflection")
     {
-        const auto mesh_block = blend->GetBlock(BLOCK_CODE_ME);
-        REQUIRE(mesh_block != NULL_OPTION);
-
-        const auto mesh_type = blend->GetBlockType(*mesh_block);
-        REQUIRE(mesh_type != NULL_OPTION);
-
         const auto fields = mesh_type->GetFields();
         REQUIRE(fields.size() == 54);
 
@@ -98,22 +127,55 @@ TEST_CASE("default blend file can be read", "[default]")
         REQUIRE(vdata_layers_data_data.data() != nullptr);
 
         // NOLINTBEGIN
-        const auto* vertex = reinterpret_cast<const Vertex*>(vdata_layers_data_data.data());
-        REQUIRE((vertex->x == Catch::Approx(1) && vertex->y == Catch::Approx(1) && vertex->z == Catch::Approx(1)));
-        ++vertex;
-        REQUIRE((vertex->x == Catch::Approx(1) && vertex->y == Catch::Approx(1) && vertex->z == Catch::Approx(-1)));
-        ++vertex;
-        REQUIRE((vertex->x == Catch::Approx(1) && vertex->y == Catch::Approx(-1) && vertex->z == Catch::Approx(1)));
-        ++vertex;
-        REQUIRE((vertex->x == Catch::Approx(1) && vertex->y == Catch::Approx(-1) && vertex->z == Catch::Approx(-1)));
-        ++vertex;
-        REQUIRE((vertex->x == Catch::Approx(-1) && vertex->y == Catch::Approx(1) && vertex->z == Catch::Approx(1)));
-        ++vertex;
-        REQUIRE((vertex->x == Catch::Approx(-1) && vertex->y == Catch::Approx(1) && vertex->z == Catch::Approx(-1)));
-        ++vertex;
-        REQUIRE((vertex->x == Catch::Approx(-1) && vertex->y == Catch::Approx(-1) && vertex->z == Catch::Approx(1)));
-        ++vertex;
-        REQUIRE((vertex->x == Catch::Approx(-1) && vertex->y == Catch::Approx(-1) && vertex->z == Catch::Approx(-1)));
+        const auto* vertices_data = reinterpret_cast<const Vertex(*)[8]>(vdata_layers_data_data.data());
+        REQUIRE(vertices_data != nullptr);
+        const auto& vertices = *vertices_data;
+        REQUIRE((vertices[0].x == Catch::Approx(1) && vertices[0].y == Catch::Approx(1) && vertices[0].z == Catch::Approx(1)));
+        REQUIRE((vertices[1].x == Catch::Approx(1) && vertices[1].y == Catch::Approx(1) && vertices[1].z == Catch::Approx(-1)));
+        REQUIRE((vertices[2].x == Catch::Approx(1) && vertices[2].y == Catch::Approx(-1) && vertices[2].z == Catch::Approx(1)));
+        REQUIRE((vertices[3].x == Catch::Approx(1) && vertices[3].y == Catch::Approx(-1) && vertices[3].z == Catch::Approx(-1)));
+        REQUIRE((vertices[4].x == Catch::Approx(-1) && vertices[4].y == Catch::Approx(1) && vertices[4].z == Catch::Approx(1)));
+        REQUIRE((vertices[5].x == Catch::Approx(-1) && vertices[5].y == Catch::Approx(1) && vertices[5].z == Catch::Approx(-1)));
+        REQUIRE((vertices[6].x == Catch::Approx(-1) && vertices[6].y == Catch::Approx(-1) && vertices[6].z == Catch::Approx(1)));
+        REQUIRE((vertices[7].x == Catch::Approx(-1) && vertices[7].y == Catch::Approx(-1) && vertices[7].z == Catch::Approx(-1)));
+        // NOLINTEND
+    }
+
+    SECTION("mesh data can be read via reflection queries")
+    {
+        const auto totvert = mesh_type->QueryValue<int, "totvert">(*mesh_block);
+        REQUIRE(totvert == 8);
+
+        const auto totlayer = mesh_type->QueryValue<int, "vdata.totlayer">(*mesh_block);
+        REQUIRE(totlayer == 1);
+
+        const auto layer_type = mesh_type->QueryValue<int, "vdata.layers[0].type">(*mesh_block);
+        REQUIRE(layer_type == 0);
+
+        static constexpr float EXPECTED_SIZE = 1.F;
+        const auto size_0 = mesh_type->QueryValue<float, "size[0]">(*mesh_block);
+        REQUIRE(size_0 == EXPECTED_SIZE);
+        const auto size_1 = mesh_type->QueryValue<float, "size[1]">(*mesh_block);
+        REQUIRE(size_1 == EXPECTED_SIZE);
+        const auto size_2 = mesh_type->QueryValue<float, "size[2]">(*mesh_block);
+        REQUIRE(size_2 == EXPECTED_SIZE);
+
+        static constexpr std::array<float, 3> EXPECTED_SIZE_ARRAY = { 1.F, 1.F, 1.F };
+        const auto size = mesh_type->QueryValue<std::array<float, 3>, "size">(*mesh_block);
+        REQUIRE(size == EXPECTED_SIZE_ARRAY);
+
+        // NOLINTBEGIN
+        const auto vertices_data = mesh_type->QueryValue<const Vertex(*)[8], "vdata.layers[0].data[0]">(*mesh_block);
+        REQUIRE((vertices_data.has_value() && *vertices_data != nullptr));
+        const auto vertices = **vertices_data;
+        REQUIRE((vertices[0].x == Catch::Approx(1) && vertices[0].y == Catch::Approx(1) && vertices[0].z == Catch::Approx(1)));
+        REQUIRE((vertices[1].x == Catch::Approx(1) && vertices[1].y == Catch::Approx(1) && vertices[1].z == Catch::Approx(-1)));
+        REQUIRE((vertices[2].x == Catch::Approx(1) && vertices[2].y == Catch::Approx(-1) && vertices[2].z == Catch::Approx(1)));
+        REQUIRE((vertices[3].x == Catch::Approx(1) && vertices[3].y == Catch::Approx(-1) && vertices[3].z == Catch::Approx(-1)));
+        REQUIRE((vertices[4].x == Catch::Approx(-1) && vertices[4].y == Catch::Approx(1) && vertices[4].z == Catch::Approx(1)));
+        REQUIRE((vertices[5].x == Catch::Approx(-1) && vertices[5].y == Catch::Approx(1) && vertices[5].z == Catch::Approx(-1)));
+        REQUIRE((vertices[6].x == Catch::Approx(-1) && vertices[6].y == Catch::Approx(-1) && vertices[6].z == Catch::Approx(1)));
+        REQUIRE((vertices[7].x == Catch::Approx(-1) && vertices[7].y == Catch::Approx(-1) && vertices[7].z == Catch::Approx(-1)));
         // NOLINTEND
     }
 }

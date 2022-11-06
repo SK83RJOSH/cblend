@@ -1,25 +1,28 @@
-name: "clang-format"
+name: clang-format
 
 on: [pull_request]
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
     - uses: actions/checkout@v3
       with:
+        lfs: true
         submodules: recursive
+        ref: ${{ github.event.pull_request.head.ref }}
+        repository: ${{ github.event.pull_request.head.repo.full_name }}
 
-    - uses: DoozyX/clang-format-lint-action@v0.13
+    - uses: SK83RJOSH/clang-format-lint-action@v0.0.1
       with:
         source: '.'
         exclude: './third_party ./external'
         extensions: 'h,cpp,hpp,inl'
-        clangFormatVersion: 12
+        clangFormatVersion: 15
         inplace: True
 
-    - uses: EndBug/add-and-commit@v4
+    - uses: EndBug/add-and-commit@v9
       with:
         default_author: github_actions
         message: 'Committing clang-format changes'
