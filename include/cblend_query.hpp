@@ -34,6 +34,7 @@ namespace algorithms
             return {};
         }
 
+        // NOLINTNEXTLINE(readability-qualified-auto)
         auto left = string.begin();
         while (IS_WHITESPACE(*left))
         {
@@ -44,13 +45,15 @@ namespace algorithms
             }
         }
 
+        // NOLINTNEXTLINE(readability-qualified-auto)
         auto right = string.end() - 1;
         while (right > left && IS_WHITESPACE(*right))
         {
             --right;
         }
 
-        return std::string_view{ &left[0], static_cast<usize>(std::distance(left, right) + 1) };
+        // NOLINTNEXTLINE(*-pointer-arithmetic)
+        return std::string_view{ &left[0], static_cast<usize>(std::distance(left, right)) + 1 };
     }
 } // namespace algorithms
 
