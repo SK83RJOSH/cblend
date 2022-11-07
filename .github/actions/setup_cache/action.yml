@@ -4,13 +4,13 @@ inputs:
   compiler:
     required: true
     type: string
-  build_type:
+  CMAKE_BUILD_TYPE:
     required: true
     type: string
-  generator:
+  CMAKE_GENERATOR:
     required: true
     type: string
-  enable_validation:
+  CBLEND_ENABLE_COVERAGE:
     required: true
     type: string
 
@@ -30,7 +30,7 @@ runs:
           ${{ env.XDG_CACHE_HOME }}/vcpkg/archives
           ${{ env.LOCALAPPDATA }}\vcpkg\archives
           ${{ env.APPDATA }}\vcpkg\archives
-        key: ${{ runner.os }}-${{ inputs.compiler }}-${{ inputs.build_type }}-${{ hashFiles('./conanfile.txt')}}-${{ inputs.generator }}-${{ inputs.enable_validation }}-${{ hashFiles('**/CMakeLists.txt') }}-${{ hashFiles('./vcpkg.json')}}
+        key: ${{ runner.os }}-${{ inputs.compiler }}-${{ inputs.CMAKE_BUILD_TYPE }}-${{ hashFiles('./conanfile.txt')}}-${{ inputs.CMAKE_GENERATOR }}-${{ inputs.CBLEND_ENABLE_COVERAGE }}-${{ hashFiles('**/CMakeLists.txt') }}-${{ hashFiles('./vcpkg.json')}}
         restore-keys: |
-          ${{ runner.os }}-${{ inputs.compiler }}-${{ inputs.build_type }}-${{ hashFiles('./conanfile.txt') }}
+          ${{ runner.os }}-${{ inputs.compiler }}-${{ inputs.CMAKE_BUILD_TYPE }}-${{ hashFiles('./conanfile.txt') }}-${{ hashFiles('./vcpkg.json')}}
 

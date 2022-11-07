@@ -228,7 +228,7 @@ ProcessFunctionPointerField(usize field_offset, std::string_view field_name, usi
         return MakeError(ReflectionError::InvalidSdnaFieldName);
     }
 
-    std::string_view name(field_name.begin() + 2, field_name.end() - 3);
+    const std::string_view name(field_name.begin() + 2, field_name.end() - 3);
 
     if (!IsValidName(name))
     {

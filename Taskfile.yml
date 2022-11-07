@@ -1,0 +1,66 @@
+version: 3
+
+tasks:
+  build_template:
+    - cmake -S ./ -B ./build -G '{{.CMAKE_GENERATOR | default "Ninja Multi-Config"}}' -DCMAKE_BUILD_TYPE:STRING={{.CMAKE_BUILD_TYPE | default "Release"}} -DCBLEND_ENABLE_COVERAGE:BOOL={{.CBLEND_ENABLE_COVERAGE | default "OFF"}} -DCBLEND_ENABLE_DOXYGEN:BOOL={{.CBLEND_ENABLE_DOXYGEN | default "OFF"}} {{.CONFIGURE_FLAGS}}
+    - cmake --build ./build --config {{.CMAKE_BUILD_TYPE | default "Release"}} {{.BUILD_FLAGS}}
+
+  run_template:
+    - cd ./build && ctest -C {{.CMAKE_BUILD_TYPE | default "Release"}} --output-on-failure
+
+  coverage_template:
+    cmds:
+      - |
+        {{if eq OS "windows"}}
+          OpenCppCoverage.exe --export_type html:./build/coverage --export_type cobertura:./build/coverage.xml --cover_children --sources "include\cblend*" --sources "source\cblend*" --modules "build\*" -- task run_template
+          powershell -c "if (!\$env:CI) { echo '[info] Opening ./build/coverage/index.html...'; start ./build/coverage/index.html }"
+        {{else}}
+          task run_template
+          mkdir -p ./build/coverage/
+          gcovr -j {{.nproc | default 1}} --delete --filter 'include/cblend.*' --filter 'source/cblend.*' --root ./build/ --print-summary --html-details ./build/coverage/index.html --xml-pretty --xml ./build/coverage.xml .
+          echo "Open ./build/coverage/index.html in a browser for a visual coverage report"
+        {{end}}
+    env:
+      CMAKE_BUILD_TYPE: "{{.CMAKE_BUILD_TYPE}}"
+
+  build:
+    - task: build_template
+      vars:
+        CBLEND_ENABLE_COVERAGE: OFF
+        CMAKE_BUILD_TYPE: "{{.CMAKE_BUILD_TYPE}}"
+
+  install:
+    - task: build
+    - cmake --install ./build --prefix {{.INSTALL_PREFIX | default "./install"}}
+    - cd build && cpack -C Release -G {{.CPACK_GENERATOR | default "ZIP"}}
+
+  test:
+    - task: build_template
+      vars:
+        CBLEND_ENABLE_COVERAGE: ON
+        CMAKE_BUILD_TYPE: "{{.CMAKE_BUILD_TYPE}}"
+    - task: run_template
+      vars:
+        CMAKE_BUILD_TYPE: "{{.CMAKE_BUILD_TYPE}}"
+
+  coverage:
+    - task: build_template
+      vars:
+        CMAKE_BUILD_TYPE: "{{.CMAKE_BUILD_TYPE}}"
+        CBLEND_ENABLE_COVERAGE: ON
+    - task: coverage_template
+
+  docs:
+    - task: build_template
+      vars:
+        CMAKE_BUILD_TYPE: Debug
+        CBLEND_ENABLE_DOXYGEN: ON
+        BUILD_FLAGS: --target doxygen-docs
+
+  clean: |
+    {{if eq OS "windows"}}
+      powershell -c 'function rmrf($file) { if (test-path $file) { rm -r -force $file }}; rmrf ./build; rmrf ./install'
+    {{else}}
+      rm -rf ./build ./install
+    {{end}}
+

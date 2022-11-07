@@ -5,23 +5,21 @@ on:
   release:
     types: [published]
   push:
-    tags:
     branches:
       - main
       - develop
 
-env:
-  CONAN_SYSREQUIRES_MODE: enabled
-  CONAN_USER_HOME: "${{ github.workspace }}/conan-cache"
-  CONAN_USER_HOME_SHORT: "${{ github.workspace }}/conan-cache/short"
-  CLANG_TIDY_VERSION: "15.0.2"
-
 jobs:
   Build:
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
     runs-on: ${{ matrix.os }}
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
     strategy:
       fail-fast: false
-
       matrix:
         os:
           - ubuntu-22.04
@@ -30,80 +28,46 @@ jobs:
         compiler:
           - llvm-15.0.2
           - gcc-12
-        generator:
-          - "Ninja Multi-Config"
-        build_type:
-          - Release
+        CMAKE_BUILD_TYPE:
           - Debug
-        enable_validation:
-          - ON
-          - OFF
+          - Release
+        CMAKE_GENERATOR:
+          - "Ninja Multi-Config"
+        CPACK_GENERATOR:
+          - ZIP
 
         exclude:
-          # LLVM is covered by Windows
           - os: ubuntu-22.04
             compiler: llvm-15.0.2
-          # We don't support MingGW
           - os: windows-2022
             compiler: gcc-12
-          # g++ is unfortunately buggy on macOS
           - os: macos-12
             compiler: gcc-12
 
         include:
-          # Add appropriate variables for gcov
           - compiler: gcc-12
-            gcov_executable: gcov
+            GCOV: gcov-12
+
           - compiler: llvm-15.0.2
-            gcov_executable: "llvm-cov gcov"
+            GCOV: "llvm-cov gcov"
 
-          # Set up preferred package generators, for given build configurations
-          - build_type: Release
-            enable_validation: OFF
-            package_generator: TBZ2
-
-          # This exists solely to make sure a non-multiconfig build works
           - os: ubuntu-22.04
             compiler: gcc-12
-            generator: "Unix Makefiles"
-            build_type: Debug
-            gcov_executable: gcov
-            enable_validation: On
-
-          # Windows msvc builds
-          - os: windows-2022
-            compiler: msvc
-            generator: "Visual Studio 17 2022"
-            build_type: Debug
-            enable_validation: On
+            CMAKE_BUILD_TYPE: Release
+            CMAKE_GENERATOR: "Unix Makefiles"
+            GCOV: gcov-12
 
           - os: windows-2022
             compiler: msvc
-            generator: "Visual Studio 17 2022"
-            build_type: Release
-            enable_validation: On
+            CMAKE_BUILD_TYPE: Debug
+            CMAKE_GENERATOR: "Visual Studio 17 2022"
 
           - os: windows-2022
             compiler: msvc
-            generator: "Visual Studio 17 2022"
-            build_type: Debug
-            enable_validation: Off
-
-          - os: windows-2022
-            compiler: msvc
-            generator: "Visual Studio 17 2022"
-            build_type: Release
-            enable_validation: Off
-            package_generator: ZIP
+            CMAKE_BUILD_TYPE: Release
+            CMAKE_GENERATOR: "Visual Studio 17 2022"
 
     steps:
-      - name: Check for llvm version mismatches
-        if: ${{ contains(matrix.compiler, 'llvm') && !contains(matrix.compiler, env.CLANG_TIDY_VERSION) }}
-        uses: actions/github-script@v3
-        with:
-          script: |
-            core.setFailed('There is a mismatch between configured llvm compiler and clang-tidy version chosen')
-
       - uses: actions/checkout@v3
         with:
           lfs: true
@@ -113,78 +77,53 @@ jobs:
         uses: ./.github/actions/setup_cache
         with:
           compiler: ${{ matrix.compiler }}
-          build_type: ${{ matrix.build_type }}
-          enable_validation: ${{ matrix.enable_validation }}
-          generator: ${{ matrix.generator }}
+          CMAKE_BUILD_TYPE: ${{ matrix.CMAKE_BUILD_TYPE }}
+          CMAKE_GENERATOR: ${{ matrix.CMAKE_GENERATOR }}
 
       - name: Setup Cpp
         id: setup_cpp
         uses: aminya/setup-cpp@v1
         with:
           compiler: ${{ matrix.compiler }}
-          vcvarsall: ${{ contains(matrix.os, 'windows' )}}
-          cmake: true
-          ninja: true
-          conan: false
-          vcpkg: false
+          vcvarsall: ${{ contains(matrix.os, 'windows') }}
           ccache: true
-          clangtidy: ${{ env.CLANG_TIDY_VERSION }}
-          cppcheck: true
-          gcc: ${{ contains(matrix.compiler, 'llvm') && '12' || '' }}
+          cmake: true
           gcovr: true
+          ninja: true
           opencppcoverage: true
+          task: true
 
-      - name: Cleanup Conan system packages (they are not properly cached)
-        if: steps.setup_cpp.with.conan == true
-        run: |
-          conan remove -f '*/system'
-
-      - name: Configure CMake
-        run: |
-          cmake -S . -B ./build -G "${{matrix.generator}}" CPACK_PACKAGING_INSTALL_PREFIX=./install -DCMAKE_INSTALL_PREFIX:STRING=./install -DCMAKE_BUILD_TYPE:STRING=${{matrix.build_type}} -DOPT_ENABLE_VALIDATION:BOOL=${{matrix.enable_validation}} -DOPT_ENABLE_COVERAGE:BOOL=${{ matrix.build_type == 'Debug' }}
-
-      - name: Build
-        # Clear out LLVM environment to avoid issues with GCC.
+      - name: Coverage
+        if: "matrix.CMAKE_BUILD_TYPE == 'Debug'"
+        run: task coverage
         env:
-          LLVM_PATH: ""
-          LD_LIBRARY_PATH: ""
-          DYLD_LIBRARY_PATH: ""
-          LDFLAGS: ""
-          CPPFLAGS: ""
-          LIBRARY_PATH: ""
-          CPATH: ""
-        # Execute the build. You can specify a specific target with "--target <NAME>"
-        run: |
-          cmake --build ./build --config ${{matrix.build_type}}
+          CMAKE_BUILD_TYPE: ${{ matrix.CMAKE_BUILD_TYPE }}
+          CMAKE_GENERATOR: ${{ matrix.CMAKE_GENERATOR }}
+          GCOV: ${{ matrix.GCOV }}
 
-      - name: Unix - Test and coverage
-        if: runner.os != 'Windows'
-        working-directory: ./build
-        # Execute tests defined by the CMake configuration.
-        run: |
-          ctest -C ${{matrix.build_type}}
-          gcovr -j ${{env.nproc}} --delete --root ../ --print-summary --xml-pretty --xml coverage.xml . --gcov-executable '${{ matrix.gcov_executable }}'
+      - name: Test
+        if: "matrix.CMAKE_BUILD_TYPE == 'Release'"
+        run: task test
+        env:
+          CMAKE_BUILD_TYPE: ${{ matrix.CMAKE_BUILD_TYPE }}
+          CMAKE_GENERATOR: ${{ matrix.CMAKE_GENERATOR }}
+          GCOV: ${{ matrix.GCOV }}
 
-      - name: Windows - Test and coverage
-        if: runner.os == 'Windows'
-        working-directory: ./build
-        run: |
-          OpenCppCoverage.exe --export_type cobertura:coverage.xml --cover_children -- ctest -C ${{matrix.build_type}}
-
-      - name: CPack
-        if: matrix.package_generator != ''
-        working-directory: ./build
-        run: |
-          cpack -C ${{matrix.build_type}} -G ${{matrix.package_generator}}
+      - name: Install
+        if: "matrix.CMAKE_BUILD_TYPE == 'Release'"
+        run: task install
+        env:
+          CMAKE_GENERATOR: ${{ matrix.CMAKE_GENERATOR }}
+          CPACK_GENERATOR: ${{ matrix.CPACK_GENERATOR }}
 
       - name: Publish Tagged Release
         uses: softprops/action-gh-release@v1
-        if: ${{ startsWith(github.ref, 'refs/tags/') && matrix.package_generator != '' }}
+        if: "startsWith(github.ref, 'refs/tags/') && matrix.CMAKE_BUILD_TYPE == 'Release'"
         with:
-          files: |
-            build/*-*${{ matrix.build_type }}*-*.*
+          files: build/*-*Release*-*.*
 
       - name: Publish to codecov
+        if: "matrix.CMAKE_BUILD_TYPE == 'Debug'"
         uses: codecov/codecov-action@v2
         with:
           flags: ${{ runner.os }}
