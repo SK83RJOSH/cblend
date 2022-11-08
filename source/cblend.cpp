@@ -244,7 +244,7 @@ ProcessFunctionPointerField(usize field_offset, std::string_view field_name, usi
 usize CountPointers(std::string_view field_name)
 {
     // Scan until we reach the beginning of the field name
-    ssize index = 0;
+    usize index = 0;
     while (index + 1 < field_name.size() && field_name[index] == '*')
     {
         ++index;
