@@ -2,6 +2,8 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cblend.hpp>
 
+#include <filesystem>
+
 using namespace cblend;
 
 // NOLINTBEGIN
@@ -31,6 +33,25 @@ TEST_CASE("queries can be created", "[default]")
     REQUIRE(composite_query->GetToken(0) == EXPECTED_NAME_TOKEN);
     REQUIRE(composite_query->GetToken(1) == EXPECTED_NAME_TOKEN);
     REQUIRE(composite_query->GetToken(2) == EXPECTED_INDEX_TOKEN);
+}
+
+// NOLINTBEGIN
+TEST_CASE("default blend file can be opened via buffer")
+// NOLINTEND
+{
+    std::ifstream file(std::filesystem::path("default.blend").c_str(), std::ios::binary);
+    file.unsetf(std::ios::skipws);
+    file.seekg(0, std::ios::end);
+
+    const auto file_size = static_cast<usize>(file.tellg());
+    file.seekg(0, std::ios::beg);
+
+    std::vector<u8> buffer;
+    buffer.reserve(file_size);
+    buffer.insert(buffer.begin(), std::istream_iterator<u8>(file), std::istream_iterator<u8>());
+
+    auto blend = Blend::Open(buffer);
+    REQUIRE(blend);
 }
 
 struct Vertex
