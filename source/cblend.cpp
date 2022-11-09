@@ -244,7 +244,7 @@ ProcessFunctionPointerField(usize field_offset, std::string_view field_name, usi
 usize CountPointers(std::string_view field_name)
 {
     // Scan until we reach the beginning of the field name
-    ssize index = 0;
+    usize index = 0;
     while (index + 1 < field_name.size() && field_name[index] == '*')
     {
         ++index;
@@ -459,16 +459,16 @@ MemoryTable CreateMemoryTable(const File& file)
     return MemoryTable(ranges);
 }
 
-Result<const Blend, BlendError> Blend::Open(std::string_view path)
+struct BlendData
 {
-    auto stream = FileStream::Create(path);
+    File file;
+    TypeDatabase type_database;
+    MemoryTable memory_table;
+};
 
-    if (!stream)
-    {
-        return MakeError(BlendError(stream.error()));
-    }
-
-    const auto header = ReadHeader(*stream);
+Result<BlendData, BlendError> ReadBlendData(Stream& stream)
+{
+    const auto header = ReadHeader(stream);
 
     if (!header)
     {
@@ -477,21 +477,21 @@ Result<const Blend, BlendError> Blend::Open(std::string_view path)
 
     if (header->endian == Endian::Little)
     {
-        stream->SetEndian(std::endian::little);
+        stream.SetEndian(std::endian::little);
     }
     else
     {
-        stream->SetEndian(std::endian::big);
+        stream.SetEndian(std::endian::big);
     }
 
-    auto file = ReadFile(*stream, *header);
+    auto file = ReadFile(stream, *header);
 
     if (!file)
     {
         return MakeError(BlendError(file.error()));
     }
 
-    if (!stream->IsAtEnd())
+    if (!stream.IsAtEnd())
     {
         return MakeError(BlendError(FormatError::FileNotExhausted));
     }
@@ -512,7 +512,39 @@ Result<const Blend, BlendError> Blend::Open(std::string_view path)
 
     auto memory_table = CreateMemoryTable(*file);
 
-    return Blend(*file, *type_database, memory_table);
+    return BlendData{ .file = std::move(*file), .type_database = std::move(*type_database), .memory_table = std::move(memory_table) };
+}
+
+Result<const Blend, BlendError> Blend::Open(std::string_view path)
+{
+    auto stream = FileStream::Create(path);
+
+    if (!stream)
+    {
+        return MakeError(BlendError(stream.error()));
+    }
+
+    auto data = ReadBlendData(*stream);
+
+    if (!data)
+    {
+        return MakeError(BlendError(data.error()));
+    }
+
+    return Blend(data->file, data->type_database, data->memory_table);
+}
+
+Result<const Blend, BlendError> Blend::Open(std::span<const u8> buffer)
+{
+    MemoryStream stream(buffer);
+    auto data = ReadBlendData(stream);
+
+    if (!data)
+    {
+        return MakeError(BlendError(data.error()));
+    }
+
+    return Blend(data->file, data->type_database, data->memory_table);
 }
 
 [[nodiscard]] Endian Blend::GetEndian() const

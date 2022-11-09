@@ -141,6 +141,7 @@ class Blend final
 {
 public:
     static Result<const Blend, BlendError> Open(std::string_view path);
+    static Result<const Blend, BlendError> Open(std::span<const u8> buffer);
 
     [[nodiscard]] Endian GetEndian() const;
     [[nodiscard]] Pointer GetPointer() const;
