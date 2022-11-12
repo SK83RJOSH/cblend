@@ -515,7 +515,7 @@ Result<BlendData, BlendError> ReadBlendData(Stream& stream)
     return BlendData{ .file = std::move(*file), .type_database = std::move(*type_database), .memory_table = std::move(memory_table) };
 }
 
-Result<const Blend, BlendError> Blend::Open(std::string_view path)
+Result<Blend, BlendError> Blend::Open(std::string_view path)
 {
     auto stream = FileStream::Create(path);
 
@@ -534,7 +534,7 @@ Result<const Blend, BlendError> Blend::Open(std::string_view path)
     return Blend(data->file, data->type_database, data->memory_table);
 }
 
-Result<const Blend, BlendError> Blend::Open(std::span<const u8> buffer)
+Result<Blend, BlendError> Blend::Read(std::span<const u8> buffer)
 {
     MemoryStream stream(buffer);
     auto data = ReadBlendData(stream);

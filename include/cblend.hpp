@@ -140,8 +140,13 @@ private:
 class Blend final
 {
 public:
-    static Result<const Blend, BlendError> Open(std::string_view path);
-    static Result<const Blend, BlendError> Open(std::span<const u8> buffer);
+    Blend(const Blend&) = delete;
+    Blend(Blend&&) = default;
+    Blend& operator=(const Blend&) = delete;
+    Blend& operator=(Blend&&) = default;
+
+    static Result<Blend, BlendError> Open(std::string_view path);
+    static Result<Blend, BlendError> Read(std::span<const u8> buffer);
 
     [[nodiscard]] Endian GetEndian() const;
     [[nodiscard]] Pointer GetPointer() const;

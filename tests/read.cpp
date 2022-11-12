@@ -50,7 +50,7 @@ TEST_CASE("default blend file can be opened via buffer")
     buffer.reserve(file_size);
     buffer.insert(buffer.begin(), std::istream_iterator<u8>(file), std::istream_iterator<u8>());
 
-    auto blend = Blend::Open(buffer);
+    auto blend = Blend::Read(buffer);
     REQUIRE(blend);
 }
 
