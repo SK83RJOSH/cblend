@@ -179,7 +179,7 @@ bool FileStream::SeekRelative(ssize position)
     return FileStream(stream);
 }
 
-MemoryStream::MemoryStream(std::span<const u8> span) : m_Span(span)
+MemoryStream::MemoryStream(MemorySpan span) : m_Span(span)
 {
     m_Position = 0;
     m_Size = m_Span.size();

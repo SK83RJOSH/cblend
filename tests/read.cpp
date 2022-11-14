@@ -50,7 +50,7 @@ TEST_CASE("default blend file can be opened via buffer")
     buffer.reserve(file_size);
     buffer.insert(buffer.begin(), std::istream_iterator<u8>(file), std::istream_iterator<u8>());
 
-    auto blend = Blend::Open(buffer);
+    const auto blend = Blend::Read(buffer);
     REQUIRE(blend);
 }
 
@@ -92,6 +92,41 @@ TEST_CASE("default blend file can be read", "[default]")
         for (const auto& dna1_block : blend->GetBlocks(BLOCK_CODE_DNA1))
         {
             REQUIRE(dna1_block.header.code == BLOCK_CODE_DNA1);
+        }
+
+        const auto layer_collection_type = blend->GetType("LayerCollection");
+        REQUIRE(layer_collection_type != NULL_OPTION);
+
+        const auto collection_child_type = blend->GetType("CollectionChild");
+        REQUIRE(collection_child_type != NULL_OPTION);
+
+        const auto collection_object_type = blend->GetType("CollectionObject");
+        REQUIRE(collection_object_type != NULL_OPTION);
+
+        for (const auto& layer_collection_block : blend->GetBlocks(*layer_collection_type))
+        {
+            const auto flag = layer_collection_type->QueryValue<u16, "flag">(layer_collection_block);
+            REQUIRE((flag.has_value() && (*flag & (1U << 4U)) == 0U));
+
+            const auto children_data = layer_collection_type->QueryValue<MemorySpan, "collection[0].children">(layer_collection_block);
+            REQUIRE(children_data);
+
+            const auto query_each_gobject = collection_child_type->QueryEachValue<MemorySpan, "collection[0].gobject">(
+                *children_data,
+                [&collection_object_type](MemorySpan gobject_data)
+                {
+                    const auto query_each_ob = collection_object_type->QueryEachValue<"ob[0]">(
+                        gobject_data,
+                        [&](const BlendType& object_type, MemorySpan object_data)
+                        {
+                            const auto type = object_type.QueryValue<u16, "type">(object_data);
+                            REQUIRE(type.has_value());
+                        }
+                    );
+                    REQUIRE(query_each_ob);
+                }
+            );
+            REQUIRE(query_each_gobject);
         }
     }
 

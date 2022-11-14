@@ -3,7 +3,6 @@
 #include <cblend_types.hpp>
 
 #include <memory>
-#include <span>
 #include <string_view>
 #include <vector>
 
