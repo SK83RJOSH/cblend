@@ -128,7 +128,8 @@ bool cblend::BlendType::operator==(const BlendType& other) const
     return results;
 }
 
-[[nodiscard]] MemorySpan BlendType::ReinterpretCast(MemorySpan data) const {
+[[nodiscard]] MemorySpan BlendType::ReinterpretCast(MemorySpan data) const
+{
     return std::span{ data.data(), GetSize() };
 }
 
