@@ -128,6 +128,10 @@ bool cblend::BlendType::operator==(const BlendType& other) const
     return results;
 }
 
+[[nodiscard]] MemorySpan BlendType::ReinterpretCast(MemorySpan data) const {
+    return std::span{ data.data(), GetSize() };
+}
+
 [[nodiscard]] Result<QueryValueResult, QueryValueError> BlendType::QueryValue(MemorySpan data, const Query& query) const
 {
     MemorySpan struct_data = data;

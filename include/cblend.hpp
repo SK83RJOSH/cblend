@@ -92,6 +92,8 @@ public:
     [[nodiscard]] Option<BlendFieldInfo> GetField(std::string_view field_name) const;
     [[nodiscard]] std::vector<BlendFieldInfo> GetFields() const;
 
+    [[nodiscard]] MemorySpan ReinterpretCast(MemorySpan data) const;
+
     [[nodiscard]] Result<QueryValueResult, QueryValueError> QueryValue(MemorySpan data, const Query& query) const;
     template<QueryString Input>
     [[nodiscard]] Result<QueryValueResult, QueryValueError> QueryValue(MemorySpan data) const;
