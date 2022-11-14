@@ -32,7 +32,7 @@ CheckOptions:
   - { key: readability-identifier-naming.StaticVariablePrefix,      value: s_                                        }
   - { key: readability-identifier-naming.StructCase,                value: CamelCase                                 }
   - { key: readability-identifier-naming.VariableCase,              value: lower_case                                }
-  - { key: readability-function-cognitive-complexity,               threshold: 30                                    }
+  - { key: readability-function-cognitive-complexity.Threshold,     value: 30                                        }
 WarningsAsErrors: "*"
 HeaderFilterRegex: ".*(include|source)(\\|/)cblend.*"
 FormatStyle: 'file'
