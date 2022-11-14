@@ -111,20 +111,22 @@ TEST_CASE("default blend file can be read", "[default]")
             const auto children_data = layer_collection_type->QueryValue<MemorySpan, "collection[0].children">(layer_collection_block);
             REQUIRE(children_data);
 
-            REQUIRE(collection_child_type->QueryEachValue<MemorySpan, "collection[0].gobject">(
+            const auto query_each_gobject = collection_child_type->QueryEachValue<MemorySpan, "collection[0].gobject">(
                 *children_data,
                 [&collection_object_type](MemorySpan gobject_data)
                 {
-                    REQUIRE(collection_object_type->QueryEachValue<"ob[0]">(
+                    const auto query_each_ob = collection_object_type->QueryEachValue<"ob[0]">(
                         gobject_data,
                         [&](const BlendType& object_type, MemorySpan object_data)
                         {
                             const auto type = object_type.QueryValue<u16, "type">(object_data);
                             REQUIRE(type.has_value());
                         }
-                    ));
+                    );
+                    REQUIRE(query_each_ob);
                 }
-            ));
+            );
+            REQUIRE(query_each_gobject);
         }
     }
 
