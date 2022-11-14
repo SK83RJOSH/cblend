@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <span>
 
 namespace cblend
 {
@@ -61,4 +62,6 @@ using usize = std::size_t;
 
 using f32 = float;
 using f64 = double;
+
+using MemorySpan = std::span<const u8>;
 } // namespace cblend

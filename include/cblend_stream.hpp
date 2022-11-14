@@ -6,7 +6,6 @@
 #include <algorithm>
 #include <bit>
 #include <fstream>
-#include <span>
 #include <string>
 #include <string_view>
 #include <variant>
@@ -102,7 +101,7 @@ private:
 class MemoryStream final : public Stream
 {
 public:
-    explicit MemoryStream(std::span<const u8> span);
+    explicit MemoryStream(MemorySpan span);
     MemoryStream(const MemoryStream&) = delete;
     MemoryStream(MemoryStream&&) = default;
     MemoryStream& operator=(const MemoryStream&) = delete;
@@ -113,7 +112,7 @@ public:
     [[nodiscard]] bool Read(std::string_view& value);
 
 private:
-    std::span<const u8> m_Span;
+    MemorySpan m_Span;
 
     bool Read(std::byte* value, usize length) final;
     bool SeekPosition(StreamPosition position) final;

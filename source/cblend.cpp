@@ -11,7 +11,7 @@ using namespace cblend;
 
 MemoryTable::MemoryTable(std::vector<MemoryRange>& ranges) : m_Ranges(std::move(ranges)) {}
 
-std::span<const u8> MemoryTable::GetMemory(u64 address, usize size) const
+MemorySpan MemoryTable::GetMemory(u64 address, usize size) const
 {
     const u64 head = address;
     const u64 tail = address + size;
@@ -56,6 +56,11 @@ BlendType::BlendType(const MemoryTable& memory_table, const Type& type) : m_Memo
             m_FieldsByName.emplace(field.name, &field);
         }
     }
+}
+
+bool cblend::BlendType::operator==(const BlendType& other) const
+{
+    return &m_Type == &other.m_Type;
 }
 
 [[nodiscard]] bool BlendType::IsArray() const
@@ -123,6 +128,119 @@ BlendType::BlendType(const MemoryTable& memory_table, const Type& type) : m_Memo
     return results;
 }
 
+[[nodiscard]] Result<QueryValueResult, QueryValueError> BlendType::QueryValue(MemorySpan data, const Query& query) const
+{
+    MemorySpan struct_data = data;
+    std::unique_ptr<BlendFieldInfo> info = nullptr;
+    std::unique_ptr<BlendType> type = std::make_unique<BlendType>(*this);
+
+    for (const auto& token : query)
+    {
+        if (data.data() == nullptr)
+        {
+            return MakeError(QueryValueError::InvalidValue);
+        }
+
+        if (const auto* index = std::get_if<usize>(&token); index != nullptr && info != nullptr)
+        {
+            const auto element_type = type->GetElementType();
+
+            if (!element_type)
+            {
+                return MakeError(QueryValueError::IndexedInvalidType);
+            }
+
+            if (type->IsArray())
+            {
+                data = info->GetData(struct_data);
+            }
+            else
+            {
+                data = info->GetPointerData(struct_data);
+            }
+
+            const usize element_size = element_type->GetSize();
+
+            if (data.data() != nullptr)
+            {
+                const usize element_offset = *index * element_size;
+
+                if (!data.empty() && element_offset + element_size > data.size())
+                {
+                    return MakeError(QueryValueError::IndexOutOfBounds);
+                }
+
+                data = std::span{ data.data() + element_offset, element_size };
+            }
+            else
+            {
+                data = std::span{ data.data(), element_size };
+            }
+
+            type = std::make_unique<BlendType>(*element_type);
+        }
+        else if (const auto* field_name = std::get_if<std::string_view>(&token); field_name != nullptr)
+        {
+            if (!type->IsStruct())
+            {
+                return MakeError(QueryValueError::IndexedInvalidType);
+            }
+
+            const auto field_info = type->GetField(*field_name);
+
+            if (!field_info)
+            {
+                return MakeError(QueryValueError::FieldNotFound);
+            }
+
+            struct_data = data;
+            info = std::make_unique<BlendFieldInfo>(*field_info);
+            data = info->GetData(data);
+            type = std::make_unique<BlendType>(info->GetFieldType());
+        }
+        else
+        {
+            return MakeError(QueryValueError::InvalidQuery);
+        }
+    }
+
+    return QueryValueResult(std::move(*type), data);
+}
+
+[[nodiscard]] Result<void, QueryValueError>
+BlendType::QueryEachValue(MemorySpan data, const Query& query, const std::function<void(const BlendType&, MemorySpan)>& callback) const
+{
+    while (!data.empty() && data.data() != nullptr)
+    {
+        auto next_value = QueryValue<"next[0]">(data);
+        if (!next_value)
+        {
+            if (next_value.error() == QueryValueError::InvalidValue)
+            {
+                break;
+            }
+            return MakeError(next_value.error());
+        }
+
+        const auto& [next_type, next_data] = *next_value;
+        if (next_data.data() == nullptr)
+        {
+            return {};
+        }
+
+        const auto query_value = next_type.QueryValue(next_data, query);
+        if (!query_value)
+        {
+            return MakeError(query_value.error());
+        }
+
+        const auto& [query_type, query_data] = *query_value;
+        callback(query_type, query_data);
+        data = next_data;
+    }
+    return {};
+}
+
 BlendFieldInfo::BlendFieldInfo(const MemoryTable& memory_table, const AggregateType::Field& field, const BlendType& declaring_type)
     : m_MemoryTable(memory_table)
     , m_Offset(field.offset)
@@ -148,7 +266,7 @@ BlendFieldInfo::BlendFieldInfo(const MemoryTable& memory_table, const AggregateT
     return m_FieldType;
 }
 
-[[nodiscard]] std::span<const u8> BlendFieldInfo::GetData(std::span<const u8> span) const
+[[nodiscard]] MemorySpan BlendFieldInfo::GetData(MemorySpan span) const
 {
     if (m_Offset + m_Size > span.size())
     {
@@ -158,12 +276,12 @@ BlendFieldInfo::BlendFieldInfo(const MemoryTable& memory_table, const AggregateT
     return std::span{ span.data() + m_Offset, m_Size };
 }
 
-[[nodiscard]] std::span<const u8> BlendFieldInfo::GetData(const Block& block) const
+[[nodiscard]] MemorySpan BlendFieldInfo::GetData(const Block& block) const
 {
     return GetData(block.body);
 }
 
-std::span<const u8> BlendFieldInfo::GetPointerData(std::span<const u8> span) const
+MemorySpan BlendFieldInfo::GetPointerData(MemorySpan span) const
 {
     if (!m_FieldType.IsPointer())
     {
@@ -190,7 +308,7 @@ std::span<const u8> BlendFieldInfo::GetPointerData(std::span<const u8> span) con
     return {};
 }
 
-std::span<const u8> BlendFieldInfo::GetPointerData(const Block& block) const
+MemorySpan BlendFieldInfo::GetPointerData(const Block& block) const
 {
     return GetPointerData(block.body);
 }
@@ -534,7 +652,7 @@ Result<Blend, BlendError> Blend::Open(std::string_view path)
     return Blend(data->file, data->type_database, data->memory_table);
 }
 
-Result<Blend, BlendError> Blend::Read(std::span<const u8> buffer)
+Result<Blend, BlendError> Blend::Read(MemorySpan buffer)
 {
     MemoryStream stream(buffer);
     auto data = ReadBlendData(stream);
@@ -572,6 +690,26 @@ Result<Blend, BlendError> Blend::Read(std::span<const u8> buffer)
     if (auto blocks = GetBlocks(code); blocks.begin() != blocks.end())
     {
         return blocks.front();
+    }
+    return NULL_OPTION;
+}
+
+[[nodiscard]] Option<const Block&> Blend::GetBlock(const BlendType& type) const
+{
+    if (auto blocks = GetBlocks(type); blocks.begin() != blocks.end())
+    {
+        return blocks.front();
+    }
+    return NULL_OPTION;
+}
+
+Option<BlendType> cblend::Blend::GetType(std::string_view name) const
+{
+    if (const auto& type_index = m_TypeDatabase.type_map.find(name);
+        type_index != m_TypeDatabase.type_map.end() && type_index->second < m_TypeDatabase.type_list.size() && type_index->second > 0)
+    {
+        const Type& result(m_TypeDatabase.type_list[type_index->second]);
+        return BlendType(m_MemoryTable, result);
     }
     return NULL_OPTION;
 }
