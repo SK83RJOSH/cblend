@@ -52,7 +52,25 @@ using namespace cblend;
     return result;
 };
 
-Result<Query, QueryError> Query::Create(std::span<std::string_view> tokens)
+Result<Query, QueryError> Query::Create(std::span<const QueryToken> tokens)
+{
+    Query result = {};
+    result.m_Tokens.reserve(tokens.size());
+
+    for (const auto& token : tokens)
+    {
+        result.m_Tokens.push_back(token);
+    }
+
+    if (result.m_Tokens.empty())
+    {
+        return MakeError(QueryError::InvalidQueryString);
+    }
+
+    return result;
+}
+
+Result<Query, QueryError> Query::Create(std::span<const std::string_view> tokens)
 {
     Query result = {};
     result.m_Tokens.reserve(tokens.size());
