@@ -52,7 +52,6 @@ using namespace cblend;
     return result;
 };
 
-
 Result<Query, QueryError> Query::Create(std::span<const QueryToken> tokens)
 {
     Query result = {};
