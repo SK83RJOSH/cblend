@@ -116,6 +116,7 @@ TEST_CASE("default blend file can be read", "[default]")
 
             const auto query_each_gobject = collection_child_type->QueryEachValue<MemorySpan, "collection[0].gobject">(
                 *children_data,
+                // NOLINTNEXTLINE(readability-function-cognitive-complexity)
                 [&collection_object_type, &mesh_type](MemorySpan gobject_data)
                 {
                     const auto query_each_ob = collection_object_type->QueryEachValue<"ob[0]">(
