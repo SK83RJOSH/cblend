@@ -170,7 +170,7 @@ bool cblend::BlendType::operator==(const BlendType& other) const
             {
                 const usize element_offset = *index * element_size;
 
-                if (!data.empty() && element_offset + element_size > data.size())
+                if (type->IsArray() && !data.empty() && element_offset + element_size > data.size())
                 {
                     return MakeError(QueryValueError::IndexOutOfBounds);
                 }

@@ -273,13 +273,13 @@ enum class QueryError
 class Query final
 {
 public:
-    [[nodiscard]] static Result<Query, QueryError> Create(std::span<std::string_view> tokens);
-
+    [[nodiscard]] static Result<Query, QueryError> Create(std::span<const QueryToken> tokens);
+    [[nodiscard]] static Result<Query, QueryError> Create(std::span<const std::string_view> tokens);
     template<QueryString Input>
     [[nodiscard]] static Result<Query, QueryError> Create()
     {
         using Tokenizer = Tokenize<"[].", TokenizeBehavior::AnyOfDelimiter | TokenizeBehavior::SkipEmpty>;
-        auto tokens = ToTypes<std::string_view, Input, Tokenizer>();
+        const auto tokens = ToTypes<std::string_view, Input, Tokenizer>();
         return Create(std::span{ tokens.data(), tokens.size() });
     }
 
