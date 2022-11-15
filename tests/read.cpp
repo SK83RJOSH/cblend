@@ -103,6 +103,9 @@ TEST_CASE("default blend file can be read", "[default]")
         const auto collection_object_type = blend->GetType("CollectionObject");
         REQUIRE(collection_object_type != NULL_OPTION);
 
+        const auto mesh_type = blend->GetType("Mesh");
+        REQUIRE(mesh_type != NULL_OPTION);
+
         for (const auto& layer_collection_block : blend->GetBlocks(*layer_collection_type))
         {
             const auto flag = layer_collection_type->QueryValue<u16, "flag">(layer_collection_block);
@@ -113,14 +116,31 @@ TEST_CASE("default blend file can be read", "[default]")
 
             const auto query_each_gobject = collection_child_type->QueryEachValue<MemorySpan, "collection[0].gobject">(
                 *children_data,
-                [&collection_object_type](MemorySpan gobject_data)
+                // NOLINTNEXTLINE(readability-function-cognitive-complexity)
+                [&collection_object_type, &mesh_type](MemorySpan gobject_data)
                 {
                     const auto query_each_ob = collection_object_type->QueryEachValue<"ob[0]">(
                         gobject_data,
-                        [&](const BlendType& object_type, MemorySpan object_data)
+                        [&mesh_type](const BlendType& object_type, MemorySpan object_data)
                         {
                             const auto type = object_type.QueryValue<u16, "type">(object_data);
                             REQUIRE(type.has_value());
+
+                            const auto data = object_type.QueryValue<MemorySpan, "data[0]">(object_data);
+                            REQUIRE((data.has_value() && data->data() != nullptr));
+
+                            if (type == 1)
+                            {
+                                const auto mesh_data = mesh_type->ReinterpretCast(*data);
+
+                                static constexpr float EXPECTED_SIZE = 1.F;
+                                const auto size_0 = mesh_type->QueryValue<float, "size[0]">(mesh_data);
+                                REQUIRE(size_0 == EXPECTED_SIZE);
+                                const auto size_1 = mesh_type->QueryValue<float, "size[1]">(mesh_data);
+                                REQUIRE(size_1 == EXPECTED_SIZE);
+                                const auto size_2 = mesh_type->QueryValue<float, "size[2]">(mesh_data);
+                                REQUIRE(size_2 == EXPECTED_SIZE);
+                            }
                         }
                     );
                     REQUIRE(query_each_ob);
